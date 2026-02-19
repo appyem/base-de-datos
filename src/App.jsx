@@ -1,4 +1,4 @@
-// ARCHIVO: src/App.jsx (CORREGIDO Y VERIFICADO)
+// ARCHIVO: src/App.jsx (CORREGIDO - LINKS FUNCIONALES)
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useParams, useNavigate } from 'react-router-dom';
 import { db, storage } from './firebase';
@@ -11,7 +11,7 @@ import {
   Users, Calendar, Download, Plus, Activity, FileSpreadsheet, 
   ChevronLeft, CheckCircle, Camera, MapPin, BadgeCheck, 
   ArrowLeft, Trash2, Link as LinkIcon, AlertCircle,
-  BarChart3
+  BarChart3, Copy, Share2, ExternalLink
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -67,6 +67,71 @@ const ErrorMessage = ({ message, onClose }) => (
   </div>
 );
 
+// Componente para copiar link
+const LinkCopier = ({ url, label }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      // Fallback para navegadores que no soportan clipboard API
+      const textArea = document.createElement('textarea');
+      textArea.value = url;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'CivisCore - Registro',
+          text: label,
+          url: url
+        });
+      } catch (err) {
+        console.log('Share canceled');
+      }
+    } else {
+      handleCopy();
+    }
+  };
+
+  return (
+    <div className="flex gap-2">
+      <button 
+        onClick={handleCopy}
+        className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+      >
+        {copied ? <CheckCircle size={16} className="text-green-600" /> : <Copy size={16} />}
+        {copied ? '¡Copiado!' : 'Copiar Link'}
+      </button>
+      <button 
+        onClick={handleShare}
+        className="flex-1 bg-primary/10 hover:bg-primary/20 text-primary py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+      >
+        <Share2 size={16} /> Compartir
+      </button>
+      <a 
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+      >
+        <ExternalLink size={16} /> Abrir
+      </a>
+    </div>
+  );
+};
+
 // --- DASHBOARD ---
 
 const Dashboard = () => {
@@ -76,7 +141,18 @@ const Dashboard = () => {
   const [showModal, setShowModal] = useState(false);
   const [newEvent, setNewEvent] = useState({ title: '', date: '', time: '', location: '', leader: '', type: 'Reunión' });
   const [eventToDelete, setEventToDelete] = useState(null);
+  const [showLinks, setShowLinks] = useState(null);
   const navigate = useNavigate();
+
+  // Obtener URL base correcta para producción y desarrollo
+  const getBaseUrl = () => {
+    const protocol = window.location.protocol;
+    const host = window.location.host;
+    const pathname = window.location.pathname;
+    // Remover trailing slash si existe
+    const cleanPathname = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+    return `${protocol}//${host}${cleanPathname}`;
+  };
 
   const fetchData = async () => {
     try {
@@ -104,7 +180,7 @@ const Dashboard = () => {
   const handleCreateEvent = async (e) => {
     e.preventDefault();
     try {
-      await addDoc(collection(db, "events"), {
+      const docRef = await addDoc(collection(db, "events"), {
         ...newEvent,
         createdAt: new Date().toISOString(),
         attendees: 0
@@ -112,6 +188,8 @@ const Dashboard = () => {
       setShowModal(false);
       setNewEvent({ title: '', date: '', time: '', location: '', leader: '', type: 'Reunión' });
       fetchData();
+      // Mostrar links automáticamente después de crear
+      setShowLinks(docRef.id);
     } catch (error) {
       console.error("Error creating event:", error);
       alert("Error creando evento");
@@ -138,8 +216,12 @@ const Dashboard = () => {
     XLSX.writeFile(wb, `${fileName}_CivisCore.xlsx`);
   };
 
-  const getBaseUrl = () => {
-    return window.location.origin + window.location.pathname;
+  const getEventLink = (eventId) => {
+    return `${getBaseUrl()}#/form/event/${eventId}`;
+  };
+
+  const getWorkerLink = () => {
+    return `${getBaseUrl()}#/form/worker`;
   };
 
   if (loading) return <Loading />;
@@ -149,6 +231,7 @@ const Dashboard = () => {
       <Header title="CivisCore Dashboard" />
       
       <div className="max-w-4xl mx-auto p-4 space-y-6">
+        {/* Resumen */}
         <div className="grid grid-cols-2 gap-4">
           <div className="card bg-gradient-to-br from-blue-500 to-blue-600 text-white border-none">
             <div className="flex items-center gap-3 mb-2">
@@ -166,6 +249,7 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {/* Botón Crear */}
         <button 
           onClick={() => setShowModal(true)}
           className="w-full py-4 bg-white border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-semibold hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
@@ -173,6 +257,7 @@ const Dashboard = () => {
           <Plus size={20} /> Crear Nuevo Evento
         </button>
 
+        {/* Lista de Eventos */}
         <div className="space-y-4">
           <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
             <Activity size={20} /> Eventos Activos
@@ -201,20 +286,30 @@ const Dashboard = () => {
                 </div>
               </div>
               
-              <div className="flex gap-2 mt-4">
-                <a 
-                  href={`${getBaseUrl}#/form/event/${event.id}`} 
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg text-sm font-medium text-center flex items-center justify-center gap-2"
+              {/* Botones de acción */}
+              <div className="flex flex-col gap-3 mt-4">
+                <button 
+                  onClick={() => setShowLinks(showLinks === event.id ? null : event.id)}
+                  className="w-full bg-primary/10 hover:bg-primary/20 text-primary py-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2"
                 >
-                  <LinkIcon size={16} /> Link Asistencia
-                </a>
+                  <LinkIcon size={16} /> {showLinks === event.id ? 'Ocultar Links' : 'Generar Links de Registro'}
+                </button>
+                
+                {showLinks === event.id && (
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-3 animate-in fade-in slide-in-from-top-2">
+                    <p className="text-sm font-medium text-gray-700">Link para tomar asistencia:</p>
+                    <LinkCopier 
+                      url={getEventLink(event.id)} 
+                      label={`Registro para evento: ${event.title}`}
+                    />
+                  </div>
+                )}
+
                 <button 
                   onClick={() => navigate(`/stats/${event.id}`)}
-                  className="flex-1 bg-primary/10 hover:bg-primary/20 text-primary py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2"
+                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2"
                 >
-                  <BarChart3 size={16} /> Ver Datos
+                  <BarChart3 size={16} /> Ver Estadísticas y Datos
                 </button>
               </div>
             </div>
@@ -223,14 +318,16 @@ const Dashboard = () => {
             <div className="card text-center py-8 text-gray-400">
               <Calendar size={48} className="mx-auto mb-3 opacity-50" />
               <p>No hay eventos creados aún</p>
+              <p className="text-sm mt-2">Crea tu primer evento para comenzar</p>
             </div>
           )}
         </div>
 
+        {/* Sección Electoreros */}
         <div className="space-y-4 pt-6 border-t border-gray-200">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
-              <Users size={20} /> Electoreros
+              <Users size={20} /> Base de Datos Electoreros
             </h2>
             <button 
               onClick={() => exportToExcel(workers, "Electoreros")}
@@ -240,14 +337,13 @@ const Dashboard = () => {
             </button>
           </div>
           
-          <a 
-            href={`${getBaseUrl}#/form/worker`} 
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block w-full bg-emerald-50 border border-emerald-200 text-emerald-700 py-3 rounded-lg text-center font-medium hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2"
-          >
-            <LinkIcon size={18} /> Link Registro Electoreros
-          </a>
+          <div className="card bg-emerald-50 border-emerald-200">
+            <p className="text-sm font-medium text-emerald-800 mb-3">Link para registro de electoreros:</p>
+            <LinkCopier 
+              url={getWorkerLink()} 
+              label="Registro de Electoreros - CivisCore"
+            />
+          </div>
 
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             <table className="w-full text-sm text-left">
@@ -275,6 +371,7 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* Modal Crear Evento */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6">
@@ -308,6 +405,7 @@ const Dashboard = () => {
         </div>
       )}
 
+      {/* Modal Confirmar Eliminación */}
       {eventToDelete && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6">
