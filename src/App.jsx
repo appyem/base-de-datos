@@ -1,6 +1,5 @@
-// ARCHIVO: src/App.jsx (CORREGIDO - LINKS FUNCIONALES)
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useParams, useNavigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { db, storage } from './firebase';
 import { collection, addDoc, getDocs, query, where, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -77,7 +76,6 @@ const LinkCopier = ({ url, label }) => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      // Fallback para navegadores que no soportan clipboard API
       const textArea = document.createElement('textarea');
       textArea.value = url;
       document.body.appendChild(textArea);
@@ -144,14 +142,10 @@ const Dashboard = () => {
   const [showLinks, setShowLinks] = useState(null);
   const navigate = useNavigate();
 
-  // Obtener URL base correcta para producción y desarrollo
   const getBaseUrl = () => {
-    const protocol = window.location.protocol;
-    const host = window.location.host;
-    const pathname = window.location.pathname;
-    // Remover trailing slash si existe
-    const cleanPathname = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
-    return `${protocol}//${host}${cleanPathname}`;
+    const origin = window.location.origin;
+    const pathname = window.location.pathname.replace(/\/$/, '');
+    return `${origin}${pathname}`;
   };
 
   const fetchData = async () => {
@@ -188,7 +182,6 @@ const Dashboard = () => {
       setShowModal(false);
       setNewEvent({ title: '', date: '', time: '', location: '', leader: '', type: 'Reunión' });
       fetchData();
-      // Mostrar links automáticamente después de crear
       setShowLinks(docRef.id);
     } catch (error) {
       console.error("Error creating event:", error);
@@ -217,11 +210,13 @@ const Dashboard = () => {
   };
 
   const getEventLink = (eventId) => {
-    return `${getBaseUrl()}#/form/event/${eventId}`;
+    const baseUrl = getBaseUrl();
+    return `${baseUrl}#/form/event/${eventId}`;
   };
 
   const getWorkerLink = () => {
-    return `${getBaseUrl()}#/form/worker`;
+    const baseUrl = getBaseUrl();
+    return `${baseUrl}#/form/worker`;
   };
 
   if (loading) return <Loading />;
@@ -231,7 +226,6 @@ const Dashboard = () => {
       <Header title="CivisCore Dashboard" />
       
       <div className="max-w-4xl mx-auto p-4 space-y-6">
-        {/* Resumen */}
         <div className="grid grid-cols-2 gap-4">
           <div className="card bg-gradient-to-br from-blue-500 to-blue-600 text-white border-none">
             <div className="flex items-center gap-3 mb-2">
@@ -249,7 +243,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Botón Crear */}
         <button 
           onClick={() => setShowModal(true)}
           className="w-full py-4 bg-white border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-semibold hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
@@ -257,7 +250,6 @@ const Dashboard = () => {
           <Plus size={20} /> Crear Nuevo Evento
         </button>
 
-        {/* Lista de Eventos */}
         <div className="space-y-4">
           <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
             <Activity size={20} /> Eventos Activos
@@ -286,7 +278,6 @@ const Dashboard = () => {
                 </div>
               </div>
               
-              {/* Botones de acción */}
               <div className="flex flex-col gap-3 mt-4">
                 <button 
                   onClick={() => setShowLinks(showLinks === event.id ? null : event.id)}
@@ -323,7 +314,6 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* Sección Electoreros */}
         <div className="space-y-4 pt-6 border-t border-gray-200">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
@@ -371,7 +361,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Modal Crear Evento */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6">
@@ -405,7 +394,6 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Modal Confirmar Eliminación */}
       {eventToDelete && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6">
@@ -426,6 +414,7 @@ const Dashboard = () => {
 
 const PublicForm = ({ type }) => {
   const { id } = useParams();
+  const location = useLocation();
   const [formData, setFormData] = useState({ name: '', idNumber: '', phone: '', sector: '', photo: null });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -435,6 +424,8 @@ const PublicForm = ({ type }) => {
   const sectors = ["Zona Urbana", "Filadelfia", "Samaria", "San Luis", "Morritos", "La Paila", "El Pintado", "El Verso", "La Soledad"];
 
   useEffect(() => {
+    console.log('PublicForm loaded:', { type, id, path: location.pathname });
+    
     if (type === 'event' && id) {
       const getEventName = async () => {
         try {
@@ -449,7 +440,7 @@ const PublicForm = ({ type }) => {
       };
       getEventName();
     }
-  }, [type, id]);
+  }, [type, id, location.pathname]);
 
   const checkDuplicateCedula = async (cedula, collectionName, eventId = null) => {
     try {
@@ -710,14 +701,14 @@ const EventStats = () => {
 
 function App() {
   return (
-    <Router>
+    <HashRouter>
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/form/event/:id" element={<PublicForm type="event" />} />
         <Route path="/form/worker" element={<PublicForm type="worker" />} />
         <Route path="/stats/:id" element={<EventStats />} />
       </Routes>
-    </Router>
+    </HashRouter>
   );
 }
 
