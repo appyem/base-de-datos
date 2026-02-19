@@ -32,7 +32,7 @@ const Header = ({ title, onBack }) => (
 const Loading = () => (
   <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-    <p className="text-gray-500 font-medium">Cargando CivisCore...</p>
+    <p className="text-gray-500 font-medium">Cargando Bases De Datos...</p>
   </div>
 );
 
@@ -89,7 +89,7 @@ const LinkCopier = ({ url, label }) => {
   const handleShare = async () => {
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'CivisCore - Registro', text: label, url });
+        await navigator.share({ title: 'Bases De Datos - Registro', text: label, url });
       } catch (err) {
         handleCopy();
       }
@@ -189,7 +189,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen pb-20 bg-gray-50">
-      <Header title="CivisCore Dashboard" />
+      <Header title="Bases De Datos Dashboard" />
       <div className="max-w-4xl mx-auto p-4 space-y-6">
         
         {/* Tarjetas resumen */}
@@ -348,7 +348,7 @@ const PublicForm = ({ type }) => {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
 
-  const sectors = ["Zona Urbana", "Filadelfia", "Samaria", "San Luis", "Morritos", "La Paila", "El Pintado", "El Verso", "La Soledad"];
+  const sectors = ["Zona Rural", "Filadelfia", "Samaria", "San Luis", "Morritos", "La Paila", "El Pintado", "El Verso", "La Soledad"];
 
   // Solo electoreros necesitan foto
   const requiresPhoto = type === 'worker';
