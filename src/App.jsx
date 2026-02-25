@@ -1,4 +1,4 @@
-// ARCHIVO: src/App.jsx (CORREGIDO - Foto solo para electoreros)
+// ARCHIVO: src/App.jsx (CORREGIDO - Mayúsculas + Storage Fix)
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, useParams, useNavigate } from 'react-router-dom';
 import { db, storage } from './firebase';
@@ -192,7 +192,6 @@ const Dashboard = () => {
       <Header title="Bases De Datos Dashboard" />
       <div className="max-w-4xl mx-auto p-4 space-y-6">
         
-        {/* Tarjetas resumen */}
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-blue-600 text-white rounded-xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-2"><Calendar size={20} /><span className="text-sm">Eventos</span></div>
@@ -204,12 +203,10 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Botón crear evento */}
         <button onClick={() => setShowModal(true)} className="w-full py-4 bg-white border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-semibold hover:border-blue-600 hover:text-blue-600 flex items-center justify-center gap-2 transition-colors">
           <Plus size={20} /> Crear Evento
         </button>
 
-        {/* Lista eventos */}
         <div className="space-y-4">
           <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
             <Activity size={20} /> Eventos Activos
@@ -252,7 +249,6 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* Electoreros */}
         <div className="pt-6 border-t border-gray-200">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
@@ -292,7 +288,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Modal crear evento */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6">
@@ -320,7 +315,6 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Modal eliminar */}
       {eventToDelete && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6">
@@ -350,7 +344,6 @@ const PublicForm = ({ type }) => {
 
   const sectors = ["Zona Rural", "Filadelfia", "Samaria", "San Luis", "Morritos", "La Paila", "El Pintado", "El Verso", "La Soledad"];
 
-  // Solo electoreros necesitan foto
   const requiresPhoto = type === 'worker';
 
   const checkDuplicate = async (cedula) => {
@@ -371,6 +364,7 @@ const PublicForm = ({ type }) => {
     setError('');
 
     try {
+      // Verificar duplicados
       const isDuplicate = await checkDuplicate(formData.idNumber);
       if (isDuplicate) {
         setError('Esta cédula ya está registrada. No se permiten duplicados.');
@@ -378,27 +372,49 @@ const PublicForm = ({ type }) => {
         return;
       }
 
-      let photoURL = '';
-      // Solo subir foto si es electorero
+      let photoURL = null;
+      
+      // Solo subir foto si es electorero y hay foto seleccionada
       if (requiresPhoto && formData.photo) {
-        const storageRef = ref(storage, `ids/${type}_${Date.now()}_${formData.idNumber}`);
-        const snapshot = await uploadBytes(storageRef, formData.photo);
-        photoURL = await getDownloadURL(snapshot.ref);
+        try {
+          const storageRef = ref(storage, `ids/${type}_${Date.now()}_${formData.idNumber}`);
+          const snapshot = await uploadBytes(storageRef, formData.photo);
+          photoURL = await getDownloadURL(snapshot.ref);
+        } catch (storageError) {
+          console.error("Error subiendo foto:", storageError);
+          // Si falla la foto, continuar sin ella para eventos
+          if (requiresPhoto) {
+            setError('Error subiendo la foto. Verifica las reglas de Firebase Storage.');
+            setLoading(false);
+            return;
+          }
+        }
       }
 
+      // Guardar en Firestore
       await addDoc(collection(db, type === 'event' ? 'event_attendees' : 'electoral_workers'), {
-        ...formData,
-        photoURL: requiresPhoto ? photoURL : null,
+        name: formData.name,
+        idNumber: formData.idNumber,
+        phone: formData.phone,
+        sector: formData.sector,
+        photoURL: photoURL,
         registeredAt: new Date().toISOString(),
         eventId: type === 'event' ? id : null
       });
+      
       setSuccess(true);
     } catch (err) {
-      console.error("Error:", err);
-      setError('Error al guardar. Verifica tu conexión.');
+      console.error("Error completo:", err);
+      setError('Error al guardar: ' + err.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Función para convertir a mayúsculas
+  const handleNameChange = (e) => {
+    const value = e.target.value.toUpperCase();
+    setFormData({...formData, name: value});
   };
 
   if (success) return <SuccessMessage message={type === 'event' ? "Asistencia registrada" : "Registro completado"} />;
@@ -418,7 +434,14 @@ const PublicForm = ({ type }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
-            <input required className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none" placeholder="Ej: Juan Pérez" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+            <input 
+              required 
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none uppercase" 
+              placeholder="Ej: JUAN PÉREZ" 
+              value={formData.name} 
+              onChange={handleNameChange}
+              style={{ textTransform: 'uppercase' }}
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -438,7 +461,6 @@ const PublicForm = ({ type }) => {
             </select>
           </div>
 
-          {/* CAMBIO: Foto solo para electoreros */}
           {requiresPhoto && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -452,7 +474,7 @@ const PublicForm = ({ type }) => {
             </div>
           )}
 
-          <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors">
+          <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors disabled:bg-gray-400">
             {loading ? 'Guardando...' : 'Enviar Registro'}
           </button>
         </form>
@@ -581,3 +603,4 @@ function App() {
 }
 
 export default App;
+
