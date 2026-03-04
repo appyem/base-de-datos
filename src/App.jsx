@@ -1,4 +1,4 @@
-// ARCHIVO: src/App.jsx (CORREGIDO - 27 Municipios de Caldas)
+// ARCHIVO: src/App.jsx (CORREGIDO - 27 Municipios + Campos Adicionales)
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, useParams, useNavigate } from 'react-router-dom';
 import { db, storage } from './firebase';
@@ -337,12 +337,20 @@ const Dashboard = () => {
 
 const PublicForm = ({ type }) => {
   const { id } = useParams();
-  const [formData, setFormData] = useState({ name: '', idNumber: '', phone: '', sector: '', photo: null });
+  const [formData, setFormData] = useState({ 
+    name: '', 
+    idNumber: '', 
+    phone: '', 
+    sector: '', 
+    leaderRef: '',
+    votingStation: '',
+    photo: null 
+  });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
 
-  // 27 MUNICIPIOS DE CALDAS
+  // 27 MUNICIPIOS DE CALDAS (Incluyendo Norcasia)
   const municipalities = [
     "Aguadas",
     "Anserma",
@@ -374,6 +382,7 @@ const PublicForm = ({ type }) => {
   ];
 
   const requiresPhoto = type === 'worker';
+  const requiresExtraFields = type === 'worker';
 
   const checkDuplicate = async (cedula) => {
     const collectionName = type === 'event' ? 'event_attendees' : 'electoral_workers';
@@ -422,6 +431,8 @@ const PublicForm = ({ type }) => {
         idNumber: formData.idNumber,
         phone: formData.phone,
         sector: formData.sector,
+        leaderRef: requiresExtraFields ? formData.leaderRef : null,
+        votingStation: requiresExtraFields ? formData.votingStation : null,
         photoURL: photoURL,
         registeredAt: new Date().toISOString(),
         eventId: type === 'event' ? id : null
@@ -484,6 +495,34 @@ const PublicForm = ({ type }) => {
               {municipalities.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
+
+          {/* CAMPOS ADICIONALES SOLO PARA ELECTOREROS */}
+          {requiresExtraFields && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Líder que lo Remite</label>
+                <input 
+                  required 
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none uppercase" 
+                  placeholder="Ej: CARLOS RAMÍREZ" 
+                  value={formData.leaderRef} 
+                  onChange={e => setFormData({...formData, leaderRef: e.target.value.toUpperCase()})}
+                  style={{ textTransform: 'uppercase' }}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Puesto de Votación</label>
+                <input 
+                  required 
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none uppercase" 
+                  placeholder="Ej: ESCUELA CENTRAL" 
+                  value={formData.votingStation} 
+                  onChange={e => setFormData({...formData, votingStation: e.target.value.toUpperCase()})}
+                  style={{ textTransform: 'uppercase' }}
+                />
+              </div>
+            </>
+          )}
 
           {requiresPhoto && (
             <div>
