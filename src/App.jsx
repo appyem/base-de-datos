@@ -1,8 +1,8 @@
-// ARCHIVO: src/App.jsx (CORREGIDO - Importación completa)
+// ARCHIVO: src/App.jsx (CON LÍMITE DE 1000 ELECTOREROS)
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, useParams, useNavigate } from 'react-router-dom';
 import { db } from './firebase';
-import { collection, addDoc, onSnapshot, query, where, orderBy, deleteDoc, doc, getDocs } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, where, orderBy, deleteDoc, doc, getDocs, count } from 'firebase/firestore';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from 'recharts';
 import { 
   Users, Calendar, Download, Plus, Activity, FileSpreadsheet, 
@@ -10,6 +10,12 @@ import {
   BarChart3, Copy, Share2, ExternalLink, CheckCircle, MapPin, BadgeCheck, UserCheck, Building2, RefreshCw, Filter
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+
+// ============================================
+// CONFIGURACIÓN
+// ============================================
+
+const MAX_ELECTOREROS = 1000;
 
 // ============================================
 // COMPONENTES UI
@@ -114,7 +120,7 @@ const LinkCopier = ({ url, label }) => {
 };
 
 // ============================================
-// DASHBOARD (TIEMPO REAL + FILTROS)
+// DASHBOARD (TIEMPO REAL + FILTROS + CONTADOR)
 // ============================================
 
 const Dashboard = () => {
@@ -172,6 +178,12 @@ const Dashboard = () => {
     count: workers.filter(w => w.sector === municipality).length
   })).filter(m => m.count > 0).sort((a, b) => b.count - a.count);
 
+  // Calcular progreso del límite
+  const progressPercentage = (workers.length / MAX_ELECTOREROS) * 100;
+  const remainingSpots = MAX_ELECTOREROS - workers.length;
+  const isNearLimit = workers.length >= MAX_ELECTOREROS * 0.9; // 90% del límite
+  const isAtLimit = workers.length >= MAX_ELECTOREROS;
+
   const handleCreateEvent = async (e) => {
     e.preventDefault();
     try {
@@ -221,6 +233,7 @@ const Dashboard = () => {
       <Header title="Bases De Datos Dashboard" />
       <div className="max-w-6xl mx-auto p-4 space-y-6">
         
+        {/* Indicador de tiempo real */}
         <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg p-3">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
@@ -231,12 +244,47 @@ const Dashboard = () => {
           </span>
         </div>
 
+        {/* Barra de progreso del límite */}
+        <div className={`rounded-xl p-6 shadow-sm ${isAtLimit ? 'bg-red-50 border-2 border-red-300' : isNearLimit ? 'bg-orange-50 border-2 border-orange-300' : 'bg-blue-50 border-2 border-blue-200'}`}>
+          <div className="flex justify-between items-center mb-3">
+            <div className="flex items-center gap-2">
+              <Users size={24} className={isAtLimit ? 'text-red-600' : isNearLimit ? 'text-orange-600' : 'text-blue-600'} />
+              <div>
+                <h3 className="font-bold text-lg">Límite de Electoreros</h3>
+                <p className="text-sm text-gray-600">
+                  {isAtLimit ? '⚠️ ¡LÍMITE ALCANZADO!' : isNearLimit ? '⚠️ ¡Casi llegamos al límite!' : '📊 Progreso de inscripciones'}
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-3xl font-bold">{workers.length}</p>
+              <p className="text-sm text-gray-600">de {MAX_ELECTOREROS}</p>
+            </div>
+          </div>
+          
+          {/* Barra de progreso */}
+          <div className="w-full bg-gray-200 rounded-full h-4 mb-3">
+            <div 
+              className={`h-4 rounded-full transition-all duration-500 ${isAtLimit ? 'bg-red-600' : isNearLimit ? 'bg-orange-500' : 'bg-blue-600'}`}
+              style={{ width: `${Math.min(progressPercentage, 100)}%` }}
+            ></div>
+          </div>
+          
+          <div className="flex justify-between text-sm">
+            <span className={isAtLimit ? 'text-red-600 font-bold' : isNearLimit ? 'text-orange-600 font-bold' : 'text-gray-600'}>
+              {remainingSpots} cupos {isAtLimit ? 'DISPONIBLES' : 'restantes'}
+            </span>
+            <span className="text-gray-600">{progressPercentage.toFixed(1)}% completado</span>
+          </div>
+        </div>
+
+        {/* Tarjetas resumen */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-blue-600 text-white rounded-xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-2"><Calendar size={20} /><span className="text-sm">Eventos</span></div>
             <p className="text-3xl font-bold">{events.length}</p>
           </div>
-          <div className="bg-green-600 text-white rounded-xl p-6 shadow-sm">
+          <div className={`rounded-xl p-6 shadow-sm ${isAtLimit ? 'bg-red-600' : 'bg-green-600'} text-white`}>
             <div className="flex items-center gap-2 mb-2"><Users size={20} /><span className="text-sm">Electoreros</span></div>
             <p className="text-3xl font-bold">{filteredWorkers.length}</p>
           </div>
@@ -250,6 +298,7 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {/* Gráfico por Municipio */}
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2">
             <BarChart3 size={20} /> Inscritos por Municipio
@@ -266,6 +315,7 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {/* Filtro por Municipio */}
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <div className="flex flex-col md:flex-row md:items-center gap-4">
             <div className="flex items-center gap-2 text-gray-700">
@@ -296,6 +346,7 @@ const Dashboard = () => {
           <Plus size={20} /> Crear Evento
         </button>
 
+        {/* Lista eventos */}
         <div className="space-y-4">
           <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2"><Activity size={20} /> Eventos Activos</h2>
           {events.map(event => (
@@ -332,6 +383,7 @@ const Dashboard = () => {
           )}
         </div>
 
+        {/* Electoreros - TABLA FILTRADA */}
         <div className="pt-6 border-t border-gray-200">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
@@ -426,7 +478,7 @@ const Dashboard = () => {
 };
 
 // ============================================
-// FORMULARIO PÚBLICO
+// FORMULARIO PÚBLICO (CON VALIDACIÓN DE LÍMITE)
 // ============================================
 
 const PublicForm = ({ type }) => {
@@ -437,6 +489,7 @@ const PublicForm = ({ type }) => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [totalWorkers, setTotalWorkers] = useState(0);
 
   const municipalities = [
     "Aguadas", "Anserma", "Aranzazu", "Belalcázar", "Chinchiná", "Filadelfia",
@@ -447,6 +500,17 @@ const PublicForm = ({ type }) => {
   ];
 
   const requiresExtraFields = type === 'worker';
+
+  // Obtener total de electoreros en tiempo real
+  useEffect(() => {
+    if (type === 'worker') {
+      const workersQuery = query(collection(db, "electoral_workers"));
+      const unsubscribe = onSnapshot(workersQuery, (snapshot) => {
+        setTotalWorkers(snapshot.size);
+      });
+      return () => unsubscribe();
+    }
+  }, [type]);
 
   const checkDuplicate = async (cedula) => {
     const collectionName = type === 'event' ? 'event_attendees' : 'electoral_workers';
@@ -466,6 +530,14 @@ const PublicForm = ({ type }) => {
     setError('');
 
     try {
+      // VALIDAR LÍMITE DE ELECTOREROS
+      if (type === 'worker' && totalWorkers >= MAX_ELECTOREROS) {
+        setError(`Lo sentimos, se ha alcanzado el límite máximo de ${MAX_ELECTOREROS} electoreros. Ya no se aceptan más registros.`);
+        setLoading(false);
+        return;
+      }
+
+      // Verificar duplicado
       const isDuplicate = await checkDuplicate(formData.idNumber);
       if (isDuplicate) {
         setError('Esta cédula ya está registrada. No se permiten duplicados.');
@@ -497,12 +569,42 @@ const PublicForm = ({ type }) => {
     setFormData({...formData, name: e.target.value.toUpperCase()});
   };
 
+  // Calcular cupos restantes
+  const remainingSpots = MAX_ELECTOREROS - totalWorkers;
+  const isAtLimit = totalWorkers >= MAX_ELECTOREROS;
+  const isNearLimit = totalWorkers >= MAX_ELECTOREROS * 0.9;
+
   if (success) return <SuccessMessage message={type === 'event' ? "Asistencia registrada" : "Registro completado"} />;
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header title={type === 'event' ? "Registro de Asistencia" : "Registro Electoreros"} />
       <div className="flex-1 max-w-md mx-auto w-full p-4 flex flex-col justify-center">
+        
+        {/* Barra de progreso solo para electoreros */}
+        {type === 'worker' && (
+          <div className={`rounded-xl p-4 mb-6 shadow-sm ${isAtLimit ? 'bg-red-50 border-2 border-red-300' : isNearLimit ? 'bg-orange-50 border-2 border-orange-300' : 'bg-blue-50 border-2 border-blue-200'}`}>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm font-medium text-gray-700">Cupos disponibles</span>
+              <span className={`text-lg font-bold ${isAtLimit ? 'text-red-600' : isNearLimit ? 'text-orange-600' : 'text-blue-600'}`}>
+                {remainingSpots} de {MAX_ELECTOREROS}
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-3">
+              <div 
+                className={`h-3 rounded-full transition-all ${isAtLimit ? 'bg-red-600' : isNearLimit ? 'bg-orange-500' : 'bg-blue-600'}`}
+                style={{ width: `${Math.min((totalWorkers / MAX_ELECTOREROS) * 100, 100)}%` }}
+              ></div>
+            </div>
+            {isNearLimit && !isAtLimit && (
+              <p className="text-xs text-orange-600 mt-2">⚠️ ¡Quedan pocos cupos! Regístrate ahora.</p>
+            )}
+            {isAtLimit && (
+              <p className="text-xs text-red-600 mt-2">❌ No hay cupos disponibles.</p>
+            )}
+          </div>
+        )}
+
         <div className="bg-white rounded-xl p-6 mb-6 text-center shadow-sm">
           <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
             {type === 'event' ? <Users className="text-blue-600" size={32} /> : <BadgeCheck className="text-green-600" size={32} />}
@@ -514,21 +616,21 @@ const PublicForm = ({ type }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
-            <input required className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none uppercase" placeholder="Ej: JUAN PÉREZ" value={formData.name} onChange={handleNameChange} style={{ textTransform: 'uppercase' }} />
+            <input required className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none uppercase" placeholder="Ej: JUAN PÉREZ" value={formData.name} onChange={handleNameChange} style={{ textTransform: 'uppercase' }} disabled={isAtLimit && type === 'worker'} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Cédula</label>
-              <input required type="number" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none" placeholder="Sin puntos" value={formData.idNumber} onChange={e => setFormData({...formData, idNumber: e.target.value})} />
+              <input required type="number" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none" placeholder="Sin puntos" value={formData.idNumber} onChange={e => setFormData({...formData, idNumber: e.target.value})} disabled={isAtLimit && type === 'worker'} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Celular</label>
-              <input required type="tel" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none" placeholder="Ej: 3001234567" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+              <input required type="tel" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none" placeholder="Ej: 3001234567" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} disabled={isAtLimit && type === 'worker'} />
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Municipio</label>
-            <select required className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none bg-white" value={formData.sector} onChange={e => setFormData({...formData, sector: e.target.value})}>
+            <select required className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none bg-white" value={formData.sector} onChange={e => setFormData({...formData, sector: e.target.value})} disabled={isAtLimit && type === 'worker'}>
               <option value="">Seleccione Municipio...</option>
               {municipalities.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
@@ -538,17 +640,17 @@ const PublicForm = ({ type }) => {
             <>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Líder que lo Remite</label>
-                <input required className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none uppercase" placeholder="Ej: CARLOS RAMÍREZ" value={formData.leaderRef} onChange={e => setFormData({...formData, leaderRef: e.target.value.toUpperCase()})} style={{ textTransform: 'uppercase' }} />
+                <input required className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none uppercase" placeholder="Ej: CARLOS RAMÍREZ" value={formData.leaderRef} onChange={e => setFormData({...formData, leaderRef: e.target.value.toUpperCase()})} style={{ textTransform: 'uppercase' }} disabled={isAtLimit && type === 'worker'} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Puesto de Votación</label>
-                <input required className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none uppercase" placeholder="Ej: ESCUELA CENTRAL" value={formData.votingStation} onChange={e => setFormData({...formData, votingStation: e.target.value.toUpperCase()})} style={{ textTransform: 'uppercase' }} />
+                <input required className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none uppercase" placeholder="Ej: ESCUELA CENTRAL" value={formData.votingStation} onChange={e => setFormData({...formData, votingStation: e.target.value.toUpperCase()})} style={{ textTransform: 'uppercase' }} disabled={isAtLimit && type === 'worker'} />
               </div>
             </>
           )}
 
-          <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors disabled:bg-gray-400">
-            {loading ? 'Guardando...' : 'Enviar Registro'}
+          <button type="submit" disabled={loading || (isAtLimit && type === 'worker')} className={`w-full font-bold py-3 rounded-lg transition-colors ${isAtLimit && type === 'worker' ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}>
+            {isAtLimit && type === 'worker' ? 'LÍMITE ALCANZADO' : loading ? 'Guardando...' : 'Enviar Registro'}
           </button>
         </form>
         <p className="text-center text-xs text-gray-400 mt-8">Tus datos están protegidos.</p>
