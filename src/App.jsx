@@ -1,4 +1,4 @@
-// ARCHIVO: src/App.jsx (CON COMPRESIÓN DE IMÁGENES)
+// ARCHIVO: src/App.jsx (SIN FOTOS - FUNCIONAMIENTO GARANTIZADO)
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, useParams, useNavigate } from 'react-router-dom';
 import { db } from './firebase';
@@ -7,12 +7,12 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { 
   Users, Calendar, Download, Plus, Activity, FileSpreadsheet, 
   ArrowLeft, Trash2, Link as LinkIcon, AlertCircle,
-  BarChart3, Copy, Share2, ExternalLink, CheckCircle, Camera, MapPin, BadgeCheck, UserCheck, Building2, X, Image
+  BarChart3, Copy, Share2, ExternalLink, CheckCircle, MapPin, BadgeCheck, UserCheck, Building2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 // ============================================
-// COMPONENTES UI REUTILIZABLES
+// COMPONENTES UI
 // ============================================
 
 const Header = ({ title, onBack }) => (
@@ -61,18 +61,6 @@ const ErrorMessage = ({ message, onClose }) => (
       <button onClick={onClose} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg">
         Entendido
       </button>
-    </div>
-  </div>
-);
-
-// Componente para ver imagen ampliada
-const ImageViewer = ({ imageBase64, onClose }) => (
-  <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={onClose}>
-    <div className="relative max-w-4xl max-h-screen">
-      <button onClick={onClose} className="absolute -top-10 right-0 text-white hover:text-gray-300">
-        <X size={32} />
-      </button>
-      <img src={imageBase64} alt="Cédula" className="max-w-full max-h-[80vh] object-contain rounded-lg" />
     </div>
   </div>
 );
@@ -126,51 +114,7 @@ const LinkCopier = ({ url, label }) => {
 };
 
 // ============================================
-// FUNCIÓN PARA COMPRIMIR IMAGEN (NUEVO)
-// ============================================
-
-const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.7) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target.result;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-
-        // Calcular nuevo tamaño manteniendo aspecto
-        if (width > height) {
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
-        } else {
-          if (height > maxHeight) {
-            width = Math.round((width * maxHeight) / height);
-            height = maxHeight;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        
-        // Convertir a base64 con compresión
-        const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
-        resolve(compressedBase64);
-      };
-      img.onerror = (error) => reject(error);
-    };
-    reader.onerror = (error) => reject(error);
-  });
-};
-
-// ============================================
-// PÁGINA: DASHBOARD
+// DASHBOARD
 // ============================================
 
 const Dashboard = () => {
@@ -180,13 +124,10 @@ const Dashboard = () => {
   const [showModal, setShowModal] = useState(false);
   const [eventToDelete, setEventToDelete] = useState(null);
   const [showLinks, setShowLinks] = useState(null);
-  const [viewImage, setViewImage] = useState(null);
   const [newEvent, setNewEvent] = useState({ title: '', date: '', time: '', location: '', leader: '', type: 'Reunión' });
   const navigate = useNavigate();
 
-  const getBaseUrl = () => {
-    return window.location.origin + window.location.pathname;
-  };
+  const getBaseUrl = () => window.location.origin + window.location.pathname;
 
   const fetchData = async () => {
     try {
@@ -195,29 +136,23 @@ const Dashboard = () => {
       setEvents(eventsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setWorkers(workersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
-      console.error("Error fetching:", error);
+      console.error("Error:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   const handleCreateEvent = async (e) => {
     e.preventDefault();
     try {
-      const docRef = await addDoc(collection(db, "events"), {
-        ...newEvent,
-        createdAt: new Date().toISOString()
-      });
+      const docRef = await addDoc(collection(db, "events"), { ...newEvent, createdAt: new Date().toISOString() });
       setShowModal(false);
       setNewEvent({ title: '', date: '', time: '', location: '', leader: '', type: 'Reunión' });
       fetchData();
       setShowLinks(docRef.id);
     } catch (error) {
-      console.error("Error:", error);
       alert("Error creando evento");
     }
   };
@@ -248,7 +183,6 @@ const Dashboard = () => {
       <Header title="Bases De Datos Dashboard" />
       <div className="max-w-6xl mx-auto p-4 space-y-6">
         
-        {/* Tarjetas resumen */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-blue-600 text-white rounded-xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-2"><Calendar size={20} /><span className="text-sm">Eventos</span></div>
@@ -268,32 +202,24 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Botón crear evento */}
-        <button onClick={() => setShowModal(true)} className="w-full py-4 bg-white border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-semibold hover:border-blue-600 hover:text-blue-600 flex items-center justify-center gap-2 transition-colors">
+        <button onClick={() => setShowModal(true)} className="w-full py-4 bg-white border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-semibold hover:border-blue-600 hover:text-blue-600 flex items-center justify-center gap-2">
           <Plus size={20} /> Crear Evento
         </button>
 
-        {/* Lista eventos */}
         <div className="space-y-4">
-          <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
-            <Activity size={20} /> Eventos Activos
-          </h2>
+          <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2"><Activity size={20} /> Eventos Activos</h2>
           {events.map(event => (
             <div key={event.id} className="bg-white rounded-xl p-6 shadow-sm">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <h3 className="font-bold text-lg text-gray-800">{event.title}</h3>
-                  <p className="text-sm text-gray-500 flex items-center gap-1">
-                    <MapPin size={14} /> {event.location} • {event.date} {event.time}
-                  </p>
+                  <p className="text-sm text-gray-500 flex items-center gap-1"><MapPin size={14} /> {event.location} • {event.date} {event.time}</p>
                   <p className="text-xs text-gray-400 mt-1">Líder: {event.leader}</p>
                 </div>
-                <button onClick={() => setEventToDelete(event.id)} className="text-red-500 hover:text-red-700 p-1">
-                  <Trash2 size={18} />
-                </button>
+                <button onClick={() => setEventToDelete(event.id)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={18} /></button>
               </div>
               <div className="flex flex-col gap-3 mt-4">
-                <button onClick={() => setShowLinks(showLinks === event.id ? null : event.id)} className="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 py-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors">
+                <button onClick={() => setShowLinks(showLinks === event.id ? null : event.id)} className="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 py-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
                   <LinkIcon size={16} /> {showLinks === event.id ? 'Ocultar Links' : 'Generar Links de Registro'}
                 </button>
                 {showLinks === event.id && (
@@ -302,7 +228,7 @@ const Dashboard = () => {
                     <LinkCopier url={`${getBaseUrl()}#/form/event/${event.id}`} label={event.title} />
                   </div>
                 )}
-                <button onClick={() => navigate(`/stats/${event.id}`)} className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors">
+                <button onClick={() => navigate(`/stats/${event.id}`)} className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
                   <BarChart3 size={16} /> Ver Estadísticas y Datos
                 </button>
               </div>
@@ -316,12 +242,9 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* Electoreros - TABLA CON IMÁGENES */}
         <div className="pt-6 border-t border-gray-200">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
-              <Users size={20} /> Base de Datos Electoreros
-            </h2>
+            <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2"><Users size={20} /> Base de Datos Electoreros</h2>
             <button onClick={() => exportToExcel(workers, "Electoreros_Completo")} className="text-green-600 text-sm flex items-center gap-1 hover:underline">
               <Download size={16} /> Descargar Excel
             </button>
@@ -340,7 +263,6 @@ const Dashboard = () => {
                   <th className="px-4 py-3 text-left">Municipio</th>
                   <th className="px-4 py-3 text-left">Líder</th>
                   <th className="px-4 py-3 text-left">Puesto</th>
-                  <th className="px-4 py-3 text-center">Foto Cédula</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -352,22 +274,10 @@ const Dashboard = () => {
                     <td className="px-4 py-3"><span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">{w.sector}</span></td>
                     <td className="px-4 py-3 text-gray-600">{w.leaderRef || '-'}</td>
                     <td className="px-4 py-3 text-gray-600">{w.votingStation || '-'}</td>
-                    <td className="px-4 py-3 text-center">
-                      {w.photoBase64 ? (
-                        <button 
-                          onClick={() => setViewImage(w.photoBase64)}
-                          className="text-blue-600 hover:text-blue-800 flex items-center justify-center gap-1 mx-auto"
-                        >
-                          <Image size={16} /> Ver
-                        </button>
-                      ) : (
-                        <span className="text-gray-400">Sin foto</span>
-                      )}
-                    </td>
                   </tr>
                 ))}
                 {workers.length === 0 && (
-                  <tr><td colSpan="7" className="px-4 py-8 text-center text-gray-400">Sin registros</td></tr>
+                  <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-400">Sin registros</td></tr>
                 )}
               </tbody>
             </table>
@@ -380,10 +290,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Visor de imágenes */}
-      {viewImage && <ImageViewer imageBase64={viewImage} onClose={() => setViewImage(null)} />}
-
-      {/* Modal crear evento */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6">
@@ -411,7 +317,6 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Modal eliminar */}
       {eventToDelete && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6">
@@ -429,24 +334,17 @@ const Dashboard = () => {
 };
 
 // ============================================
-// PÁGINA: FORMULARIO PÚBLICO (CON COMPRESIÓN)
+// FORMULARIO PÚBLICO (SIN FOTOS - FUNCIONAL)
 // ============================================
 
 const PublicForm = ({ type }) => {
   const { id } = useParams();
   const [formData, setFormData] = useState({ 
-    name: '', 
-    idNumber: '', 
-    phone: '', 
-    sector: '', 
-    leaderRef: '',
-    votingStation: '',
-    photoBase64: null 
+    name: '', idNumber: '', phone: '', sector: '', leaderRef: '', votingStation: '' 
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
-  const [imageSize, setImageSize] = useState('');
 
   const municipalities = [
     "Aguadas", "Anserma", "Aranzazu", "Belalcázar", "Chinchiná", "Filadelfia",
@@ -476,6 +374,7 @@ const PublicForm = ({ type }) => {
     setError('');
 
     try {
+      // Verificar duplicado
       const isDuplicate = await checkDuplicate(formData.idNumber);
       if (isDuplicate) {
         setError('Esta cédula ya está registrada. No se permiten duplicados.');
@@ -483,18 +382,7 @@ const PublicForm = ({ type }) => {
         return;
       }
 
-      // Verificar tamaño de la imagen (max 500KB para Firestore)
-      if (formData.photoBase64) {
-        const sizeInBytes = new Blob([formData.photoBase64]).size;
-        const sizeInKB = Math.round(sizeInBytes / 1024);
-        
-        if (sizeInKB > 500) {
-          setError(`La imagen es muy grande (${sizeInKB}KB). Máximo 500KB. La imagen se ha comprimido automáticamente, intenta subir una foto con mejor iluminación.`);
-          setLoading(false);
-          return;
-        }
-      }
-
+      // Guardar datos (SIN FOTO - mucho más rápido y seguro)
       await addDoc(collection(db, type === 'event' ? 'event_attendees' : 'electoral_workers'), {
         name: formData.name,
         idNumber: formData.idNumber,
@@ -502,49 +390,21 @@ const PublicForm = ({ type }) => {
         sector: formData.sector,
         leaderRef: requiresExtraFields ? formData.leaderRef : null,
         votingStation: requiresExtraFields ? formData.votingStation : null,
-        photoBase64: formData.photoBase64 || null,
         registeredAt: new Date().toISOString(),
         eventId: type === 'event' ? id : null
       });
       
       setSuccess(true);
     } catch (err) {
-      console.error("Error completo:", err);
-      let errorMsg = 'Error al guardar: ' + err.message;
-      
-      // Mensaje específico para límite de tamaño
-      if (err.message.includes('1048576') || err.message.includes('bytes')) {
-        errorMsg = 'La imagen es muy grande. Por favor toma una foto con menos resolución o sin foto.';
-      }
-      
-      setError(errorMsg);
+      console.error("Error:", err);
+      setError('Error al guardar: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleNameChange = (e) => {
-    const value = e.target.value.toUpperCase();
-    setFormData({...formData, name: value});
-  };
-
-  const handlePhotoChange = async (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      try {
-        setLoading(true);
-        // Comprimir imagen antes de guardar
-        const compressedBase64 = await compressImage(file, 800, 800, 0.7);
-        const sizeInKB = Math.round(new Blob([compressedBase64]).size / 1024);
-        setFormData({...formData, photoBase64: compressedBase64});
-        setImageSize(`✅ Imagen comprimida: ${sizeInKB}KB`);
-        setLoading(false);
-      } catch (err) {
-        console.error("Error compressing:", err);
-        setError('Error procesando la imagen. Intenta con otra foto.');
-        setLoading(false);
-      }
-    }
+    setFormData({...formData, name: e.target.value.toUpperCase()});
   };
 
   if (success) return <SuccessMessage message={type === 'event' ? "Asistencia registrada" : "Registro completado"} />;
@@ -597,23 +457,6 @@ const PublicForm = ({ type }) => {
             </>
           )}
 
-          {/* FOTO OPCIONAL - BASE64 CON COMPRESIÓN */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Foto de Cédula <span className="text-gray-400">(Opcional - Máx 500KB)</span>
-            </label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition-colors">
-              <input type="file" accept="image/*" capture="environment" className="w-full" onChange={handlePhotoChange} disabled={loading} />
-              <Camera className="mx-auto text-gray-400 mb-2" size={24} />
-              <p className="text-sm text-gray-500">
-                {formData.photoBase64 ? imageSize || "✅ Imagen lista" : "Toca para subir foto"}
-              </p>
-              <p className="text-xs text-gray-400 mt-2">
-                💡 La imagen se comprime automáticamente
-              </p>
-            </div>
-          </div>
-
           <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors disabled:bg-gray-400">
             {loading ? 'Guardando...' : 'Enviar Registro'}
           </button>
@@ -626,7 +469,7 @@ const PublicForm = ({ type }) => {
 };
 
 // ============================================
-// PÁGINA: ESTADÍSTICAS
+// ESTADÍSTICAS
 // ============================================
 
 const EventStats = () => {
