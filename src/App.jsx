@@ -1,4 +1,4 @@
-// ARCHIVO: src/App.jsx (SIN STORAGE - IMÁGENES EN BASE64)
+// ARCHIVO: src/App.jsx (CON COMPRESIÓN DE IMÁGENES)
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, useParams, useNavigate } from 'react-router-dom';
 import { db } from './firebase';
@@ -123,6 +123,50 @@ const LinkCopier = ({ url, label }) => {
       </a>
     </div>
   );
+};
+
+// ============================================
+// FUNCIÓN PARA COMPRIMIR IMAGEN (NUEVO)
+// ============================================
+
+const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.7) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Calcular nuevo tamaño manteniendo aspecto
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Convertir a base64 con compresión
+        const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressedBase64);
+      };
+      img.onerror = (error) => reject(error);
+    };
+    reader.onerror = (error) => reject(error);
+  });
 };
 
 // ============================================
@@ -385,7 +429,7 @@ const Dashboard = () => {
 };
 
 // ============================================
-// PÁGINA: FORMULARIO PÚBLICO (BASE64)
+// PÁGINA: FORMULARIO PÚBLICO (CON COMPRESIÓN)
 // ============================================
 
 const PublicForm = ({ type }) => {
@@ -402,6 +446,7 @@ const PublicForm = ({ type }) => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [imageSize, setImageSize] = useState('');
 
   const municipalities = [
     "Aguadas", "Anserma", "Aranzazu", "Belalcázar", "Chinchiná", "Filadelfia",
@@ -412,16 +457,6 @@ const PublicForm = ({ type }) => {
   ];
 
   const requiresExtraFields = type === 'worker';
-
-  // Convertir imagen a Base64
-  const convertToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = error => reject(error);
-    });
-  };
 
   const checkDuplicate = async (cedula) => {
     const collectionName = type === 'event' ? 'event_attendees' : 'electoral_workers';
@@ -448,6 +483,18 @@ const PublicForm = ({ type }) => {
         return;
       }
 
+      // Verificar tamaño de la imagen (max 500KB para Firestore)
+      if (formData.photoBase64) {
+        const sizeInBytes = new Blob([formData.photoBase64]).size;
+        const sizeInKB = Math.round(sizeInBytes / 1024);
+        
+        if (sizeInKB > 500) {
+          setError(`La imagen es muy grande (${sizeInKB}KB). Máximo 500KB. La imagen se ha comprimido automáticamente, intenta subir una foto con mejor iluminación.`);
+          setLoading(false);
+          return;
+        }
+      }
+
       await addDoc(collection(db, type === 'event' ? 'event_attendees' : 'electoral_workers'), {
         name: formData.name,
         idNumber: formData.idNumber,
@@ -463,7 +510,14 @@ const PublicForm = ({ type }) => {
       setSuccess(true);
     } catch (err) {
       console.error("Error completo:", err);
-      setError('Error al guardar: ' + err.message);
+      let errorMsg = 'Error al guardar: ' + err.message;
+      
+      // Mensaje específico para límite de tamaño
+      if (err.message.includes('1048576') || err.message.includes('bytes')) {
+        errorMsg = 'La imagen es muy grande. Por favor toma una foto con menos resolución o sin foto.';
+      }
+      
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -478,10 +532,17 @@ const PublicForm = ({ type }) => {
     const file = e.target.files[0];
     if (file) {
       try {
-        const base64 = await convertToBase64(file);
-        setFormData({...formData, photoBase64: base64});
+        setLoading(true);
+        // Comprimir imagen antes de guardar
+        const compressedBase64 = await compressImage(file, 800, 800, 0.7);
+        const sizeInKB = Math.round(new Blob([compressedBase64]).size / 1024);
+        setFormData({...formData, photoBase64: compressedBase64});
+        setImageSize(`✅ Imagen comprimida: ${sizeInKB}KB`);
+        setLoading(false);
       } catch (err) {
-        setError('Error procesando la imagen');
+        console.error("Error compressing:", err);
+        setError('Error procesando la imagen. Intenta con otra foto.');
+        setLoading(false);
       }
     }
   };
@@ -536,15 +597,20 @@ const PublicForm = ({ type }) => {
             </>
           )}
 
-          {/* FOTO OPCIONAL - BASE64 */}
+          {/* FOTO OPCIONAL - BASE64 CON COMPRESIÓN */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Foto de Cédula <span className="text-gray-400">(Opcional)</span>
+              Foto de Cédula <span className="text-gray-400">(Opcional - Máx 500KB)</span>
             </label>
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition-colors">
-              <input type="file" accept="image/*" capture="environment" className="w-full" onChange={handlePhotoChange} />
+              <input type="file" accept="image/*" capture="environment" className="w-full" onChange={handlePhotoChange} disabled={loading} />
               <Camera className="mx-auto text-gray-400 mb-2" size={24} />
-              <p className="text-sm text-gray-500">{formData.photoBase64 ? "✅ Imagen lista" : "Toca para subir foto"}</p>
+              <p className="text-sm text-gray-500">
+                {formData.photoBase64 ? imageSize || "✅ Imagen lista" : "Toca para subir foto"}
+              </p>
+              <p className="text-xs text-gray-400 mt-2">
+                💡 La imagen se comprime automáticamente
+              </p>
             </div>
           </div>
 
