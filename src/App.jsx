@@ -1,4 +1,4 @@
-// ARCHIVO: src/App.jsx (CORREGIDO - 27 Municipios + Campos Adicionales)
+// ARCHIVO: src/App.jsx (ACTUALIZADO - Dashboard con Nuevos Campos)
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, useParams, useNavigate } from 'react-router-dom';
 import { db, storage } from './firebase';
@@ -8,7 +8,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { 
   Users, Calendar, Download, Plus, Activity, FileSpreadsheet, 
   ArrowLeft, Trash2, Link as LinkIcon, AlertCircle,
-  BarChart3, Copy, Share2, ExternalLink, CheckCircle, Camera, MapPin, BadgeCheck
+  BarChart3, Copy, Share2, ExternalLink, CheckCircle, Camera, MapPin, BadgeCheck, UserCheck, Building2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -115,7 +115,7 @@ const LinkCopier = ({ url, label }) => {
 };
 
 // ============================================
-// PÁGINA: DASHBOARD
+// PÁGINA: DASHBOARD (ACTUALIZADO)
 // ============================================
 
 const Dashboard = () => {
@@ -190,9 +190,10 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen pb-20 bg-gray-50">
       <Header title="Bases De Datos Dashboard" />
-      <div className="max-w-4xl mx-auto p-4 space-y-6">
+      <div className="max-w-6xl mx-auto p-4 space-y-6">
         
-        <div className="grid grid-cols-2 gap-4">
+        {/* Tarjetas resumen */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-blue-600 text-white rounded-xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-2"><Calendar size={20} /><span className="text-sm">Eventos</span></div>
             <p className="text-3xl font-bold">{events.length}</p>
@@ -201,12 +202,22 @@ const Dashboard = () => {
             <div className="flex items-center gap-2 mb-2"><Users size={20} /><span className="text-sm">Electoreros</span></div>
             <p className="text-3xl font-bold">{workers.length}</p>
           </div>
+          <div className="bg-purple-600 text-white rounded-xl p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-2"><UserCheck size={20} /><span className="text-sm">Líderes</span></div>
+            <p className="text-3xl font-bold">{new Set(workers.map(w => w.leaderRef).filter(Boolean)).size}</p>
+          </div>
+          <div className="bg-orange-600 text-white rounded-xl p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-2"><Building2 size={20} /><span className="text-sm">Puestos</span></div>
+            <p className="text-3xl font-bold">{new Set(workers.map(w => w.votingStation).filter(Boolean)).size}</p>
+          </div>
         </div>
 
+        {/* Botón crear evento */}
         <button onClick={() => setShowModal(true)} className="w-full py-4 bg-white border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-semibold hover:border-blue-600 hover:text-blue-600 flex items-center justify-center gap-2 transition-colors">
           <Plus size={20} /> Crear Evento
         </button>
 
+        {/* Lista eventos */}
         <div className="space-y-4">
           <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
             <Activity size={20} /> Eventos Activos
@@ -249,12 +260,13 @@ const Dashboard = () => {
           )}
         </div>
 
+        {/* Electoreros - TABLA COMPLETA CON NUEVOS CAMPOS */}
         <div className="pt-6 border-t border-gray-200">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
-              <Users size={20} /> Electoreros
+              <Users size={20} /> Base de Datos Electoreros
             </h2>
-            <button onClick={() => exportToExcel(workers, "Electoreros")} className="text-green-600 text-sm flex items-center gap-1 hover:underline">
+            <button onClick={() => exportToExcel(workers, "Electoreros_Completo")} className="text-green-600 text-sm flex items-center gap-1 hover:underline">
               <Download size={16} /> Descargar Excel
             </button>
           </div>
@@ -262,32 +274,44 @@ const Dashboard = () => {
             <p className="text-sm font-medium text-green-800 mb-2">Link registro de electoreros:</p>
             <LinkCopier url={`${getBaseUrl()}#/form/worker`} label="Registro Electoreros" />
           </div>
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-            <table className="w-full text-sm text-left">
+          <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+            <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-500">
                 <tr>
-                  <th className="px-4 py-3">Nombre</th>
-                  <th className="px-4 py-3">Municipio</th>
-                  <th className="px-4 py-3">Cédula</th>
+                  <th className="px-4 py-3 text-left">Nombre</th>
+                  <th className="px-4 py-3 text-left">Cédula</th>
+                  <th className="px-4 py-3 text-left">Celular</th>
+                  <th className="px-4 py-3 text-left">Municipio</th>
+                  <th className="px-4 py-3 text-left">Líder que lo Remite</th>
+                  <th className="px-4 py-3 text-left">Puesto de Votación</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {workers.slice(0, 5).map(w => (
-                  <tr key={w.id}>
-                    <td className="px-4 py-3 font-medium">{w.name}</td>
-                    <td className="px-4 py-3">{w.sector}</td>
-                    <td className="px-4 py-3 text-gray-500">{w.idNumber}</td>
+                {workers.slice(0, 10).map(w => (
+                  <tr key={w.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium text-gray-800">{w.name}</td>
+                    <td className="px-4 py-3 text-gray-600">{w.idNumber}</td>
+                    <td className="px-4 py-3 text-gray-600">{w.phone}</td>
+                    <td className="px-4 py-3"><span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">{w.sector}</span></td>
+                    <td className="px-4 py-3 text-gray-600">{w.leaderRef || '-'}</td>
+                    <td className="px-4 py-3 text-gray-600">{w.votingStation || '-'}</td>
                   </tr>
                 ))}
                 {workers.length === 0 && (
-                  <tr><td colSpan="3" className="px-4 py-8 text-center text-gray-400">Sin registros</td></tr>
+                  <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-400">Sin registros</td></tr>
                 )}
               </tbody>
             </table>
+            {workers.length > 10 && (
+              <div className="p-3 text-center text-xs text-gray-400 border-t bg-gray-50">
+                Mostrando 10 de {workers.length} registros. Descarga Excel para ver todos.
+              </div>
+            )}
           </div>
         </div>
       </div>
 
+      {/* Modal crear evento */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6">
@@ -315,6 +339,7 @@ const Dashboard = () => {
         </div>
       )}
 
+      {/* Modal eliminar */}
       {eventToDelete && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6">
@@ -350,35 +375,12 @@ const PublicForm = ({ type }) => {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
 
-  // 27 MUNICIPIOS DE CALDAS (Incluyendo Norcasia)
   const municipalities = [
-    "Aguadas",
-    "Anserma",
-    "Aranzazu",
-    "Belalcázar",
-    "Chinchiná",
-    "Filadelfia",
-    "La Dorada",
-    "La Merced",
-    "Manizales (Capital)",
-    "Manzanares",
-    "Marmato",
-    "Marquetalia",
-    "Marulanda",
-    "Neira",
-    "Norcasia",
-    "Pácora",
-    "Palestina",
-    "Pensilvania",
-    "Riosucio",
-    "Risaralda",
-    "Salamina",
-    "Samaná",
-    "San José",
-    "Supía",
-    "Victoria",
-    "Villamaría",
-    "Viterbo"
+    "Aguadas", "Anserma", "Aranzazu", "Belalcázar", "Chinchiná", "Filadelfia",
+    "La Dorada", "La Merced", "Manizales (Capital)", "Manzanares", "Marmato",
+    "Marquetalia", "Marulanda", "Neira", "Norcasia", "Pácora", "Palestina",
+    "Pensilvania", "Riosucio", "Risaralda", "Salamina", "Samaná", "San José",
+    "Supía", "Victoria", "Villamaría", "Viterbo"
   ];
 
   const requiresPhoto = type === 'worker';
@@ -469,14 +471,7 @@ const PublicForm = ({ type }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
-            <input 
-              required 
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none uppercase" 
-              placeholder="Ej: JUAN PÉREZ" 
-              value={formData.name} 
-              onChange={handleNameChange}
-              style={{ textTransform: 'uppercase' }}
-            />
+            <input required className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none uppercase" placeholder="Ej: JUAN PÉREZ" value={formData.name} onChange={handleNameChange} style={{ textTransform: 'uppercase' }} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -496,39 +491,22 @@ const PublicForm = ({ type }) => {
             </select>
           </div>
 
-          {/* CAMPOS ADICIONALES SOLO PARA ELECTOREROS */}
           {requiresExtraFields && (
             <>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Líder que lo Remite</label>
-                <input 
-                  required 
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none uppercase" 
-                  placeholder="Ej: CARLOS RAMÍREZ" 
-                  value={formData.leaderRef} 
-                  onChange={e => setFormData({...formData, leaderRef: e.target.value.toUpperCase()})}
-                  style={{ textTransform: 'uppercase' }}
-                />
+                <input required className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none uppercase" placeholder="Ej: CARLOS RAMÍREZ" value={formData.leaderRef} onChange={e => setFormData({...formData, leaderRef: e.target.value.toUpperCase()})} style={{ textTransform: 'uppercase' }} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Puesto de Votación</label>
-                <input 
-                  required 
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none uppercase" 
-                  placeholder="Ej: ESCUELA CENTRAL" 
-                  value={formData.votingStation} 
-                  onChange={e => setFormData({...formData, votingStation: e.target.value.toUpperCase()})}
-                  style={{ textTransform: 'uppercase' }}
-                />
+                <input required className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none uppercase" placeholder="Ej: ESCUELA CENTRAL" value={formData.votingStation} onChange={e => setFormData({...formData, votingStation: e.target.value.toUpperCase()})} style={{ textTransform: 'uppercase' }} />
               </div>
             </>
           )}
 
           {requiresPhoto && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Foto de Cédula <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Foto de Cédula</label>
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition-colors">
                 <input type="file" accept="image/*" capture="environment" className="w-full" onChange={e => setFormData({...formData, photo: e.target.files[0]})} />
                 <Camera className="mx-auto text-gray-400 mb-2" size={24} />
@@ -549,7 +527,7 @@ const PublicForm = ({ type }) => {
 };
 
 // ============================================
-// PÁGINA: ESTADÍSTICAS
+// PÁGINA: ESTADÍSTICAS (ACTUALIZADA)
 // ============================================
 
 const EventStats = () => {
@@ -586,7 +564,7 @@ const EventStats = () => {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <Header title="Estadísticas" onBack={() => navigate('/')} />
-      <div className="max-w-4xl mx-auto p-4 space-y-6">
+      <div className="max-w-6xl mx-auto p-4 space-y-6">
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-white rounded-xl p-6 text-center shadow-sm">
             <p className="text-gray-500 text-sm">Asistentes</p>
@@ -623,9 +601,14 @@ const EventStats = () => {
             </button>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
+            <table className="w-full text-sm">
               <thead className="bg-gray-100 text-gray-600">
-                <tr><th className="p-3">Nombre</th><th className="p-3">Cédula</th><th className="p-3">Celular</th><th className="p-3">Municipio</th></tr>
+                <tr>
+                  <th className="p-3 text-left">Nombre</th>
+                  <th className="p-3 text-left">Cédula</th>
+                  <th className="p-3 text-left">Celular</th>
+                  <th className="p-3 text-left">Municipio</th>
+                </tr>
               </thead>
               <tbody className="divide-y">
                 {data.map(p => (
