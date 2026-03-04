@@ -1,13 +1,13 @@
-// ARCHIVO: src/App.jsx (SIN FOTOS - FUNCIONAMIENTO GARANTIZADO)
+// ARCHIVO: src/App.jsx (CON FILTROS + TIEMPO REAL)
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, useParams, useNavigate } from 'react-router-dom';
 import { db } from './firebase';
-import { collection, addDoc, getDocs, query, where, orderBy, deleteDoc, doc } from 'firebase/firestore';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { collection, addDoc, onSnapshot, query, where, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from 'recharts';
 import { 
   Users, Calendar, Download, Plus, Activity, FileSpreadsheet, 
   ArrowLeft, Trash2, Link as LinkIcon, AlertCircle,
-  BarChart3, Copy, Share2, ExternalLink, CheckCircle, MapPin, BadgeCheck, UserCheck, Building2
+  BarChart3, Copy, Share2, ExternalLink, CheckCircle, MapPin, BadgeCheck, UserCheck, Building2, RefreshCw, Filter
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -114,7 +114,7 @@ const LinkCopier = ({ url, label }) => {
 };
 
 // ============================================
-// DASHBOARD
+// DASHBOARD (CON TIEMPO REAL + FILTROS)
 // ============================================
 
 const Dashboard = () => {
@@ -125,24 +125,57 @@ const Dashboard = () => {
   const [eventToDelete, setEventToDelete] = useState(null);
   const [showLinks, setShowLinks] = useState(null);
   const [newEvent, setNewEvent] = useState({ title: '', date: '', time: '', location: '', leader: '', type: 'Reunión' });
+  const [selectedMunicipality, setSelectedMunicipality] = useState('Todos');
+  const [lastUpdate, setLastUpdate] = useState(new Date());
   const navigate = useNavigate();
+
+  const municipalities = [
+    "Todos", "Aguadas", "Anserma", "Aranzazu", "Belalcázar", "Chinchiná", "Filadelfia",
+    "La Dorada", "La Merced", "Manizales (Capital)", "Manzanares", "Marmato",
+    "Marquetalia", "Marulanda", "Neira", "Norcasia", "Pácora", "Palestina",
+    "Pensilvania", "Riosucio", "Risaralda", "Salamina", "Samaná", "San José",
+    "Supía", "Victoria", "Villamaría", "Viterbo"
+  ];
 
   const getBaseUrl = () => window.location.origin + window.location.pathname;
 
-  const fetchData = async () => {
-    try {
-      const eventsSnap = await getDocs(query(collection(db, "events"), orderBy("createdAt", "desc")));
-      const workersSnap = await getDocs(query(collection(db, "electoral_workers")));
-      setEvents(eventsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setWorkers(workersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    } catch (error) {
-      console.error("Error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // TIEMPO REAL CON onSnapshot
+  useEffect(() => {
+    // Escuchar eventos en tiempo real
+    const eventsQuery = query(collection(db, "events"), orderBy("createdAt", "desc"));
+    const unsubscribeEvents = onSnapshot(eventsQuery, (snapshot) => {
+      const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setEvents(eventsData);
+      setLastUpdate(new Date());
+    });
 
-  useEffect(() => { fetchData(); }, []);
+    // Escuchar electoreros en tiempo real
+    const workersQuery = query(collection(db, "electoral_workers"));
+    const unsubscribeWorkers = onSnapshot(workersQuery, (snapshot) => {
+      const workersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setWorkers(workersData);
+      setLastUpdate(new Date());
+    });
+
+    setLoading(false);
+
+    // Limpiar suscripciones al desmontar
+    return () => {
+      unsubscribeEvents();
+      unsubscribeWorkers();
+    };
+  }, []);
+
+  // Filtrar por municipio
+  const filteredWorkers = selectedMunicipality === 'Todos' 
+    ? workers 
+    : workers.filter(w => w.sector === selectedMunicipality);
+
+  // Agrupar por municipio para estadísticas
+  const workersByMunicipality = municipalities.filter(m => m !== 'Todos').map(municipality => ({
+    name: municipality,
+    count: workers.filter(w => w.sector === municipality).length
+  })).filter(m => m.count > 0).sort((a, b) => b.count - a.count);
 
   const handleCreateEvent = async (e) => {
     e.preventDefault();
@@ -150,7 +183,6 @@ const Dashboard = () => {
       const docRef = await addDoc(collection(db, "events"), { ...newEvent, createdAt: new Date().toISOString() });
       setShowModal(false);
       setNewEvent({ title: '', date: '', time: '', location: '', leader: '', type: 'Reunión' });
-      fetchData();
       setShowLinks(docRef.id);
     } catch (error) {
       alert("Error creando evento");
@@ -161,7 +193,6 @@ const Dashboard = () => {
     if (confirm('¿Eliminar evento?')) {
       try {
         await deleteDoc(doc(db, "events", eventId));
-        fetchData();
         setEventToDelete(null);
       } catch (error) {
         alert("Error eliminando");
@@ -176,6 +207,18 @@ const Dashboard = () => {
     XLSX.writeFile(wb, `${fileName}.xlsx`);
   };
 
+  const exportFilteredExcel = () => {
+    const dataToExport = filteredWorkers.map(w => ({
+      Nombre: w.name,
+      Cédula: w.idNumber,
+      Celular: w.phone,
+      Municipio: w.sector,
+      Líder: w.leaderRef || '',
+      Puesto: w.votingStation || ''
+    }));
+    exportToExcel(dataToExport, `Electoreros_${selectedMunicipality}`);
+  };
+
   if (loading) return <Loading />;
 
   return (
@@ -183,6 +226,18 @@ const Dashboard = () => {
       <Header title="Bases De Datos Dashboard" />
       <div className="max-w-6xl mx-auto p-4 space-y-6">
         
+        {/* Indicador de tiempo real */}
+        <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg p-3">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <span className="text-sm text-green-700 font-medium">Actualización en tiempo real</span>
+          </div>
+          <span className="text-xs text-gray-500">
+            Última: {lastUpdate.toLocaleTimeString()}
+          </span>
+        </div>
+
+        {/* Tarjetas resumen */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-blue-600 text-white rounded-xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-2"><Calendar size={20} /><span className="text-sm">Eventos</span></div>
@@ -190,15 +245,59 @@ const Dashboard = () => {
           </div>
           <div className="bg-green-600 text-white rounded-xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-2"><Users size={20} /><span className="text-sm">Electoreros</span></div>
-            <p className="text-3xl font-bold">{workers.length}</p>
+            <p className="text-3xl font-bold">{filteredWorkers.length}</p>
           </div>
           <div className="bg-purple-600 text-white rounded-xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-2"><UserCheck size={20} /><span className="text-sm">Líderes</span></div>
-            <p className="text-3xl font-bold">{new Set(workers.map(w => w.leaderRef).filter(Boolean)).size}</p>
+            <p className="text-3xl font-bold">{new Set(filteredWorkers.map(w => w.leaderRef).filter(Boolean)).size}</p>
           </div>
           <div className="bg-orange-600 text-white rounded-xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-2"><Building2 size={20} /><span className="text-sm">Puestos</span></div>
-            <p className="text-3xl font-bold">{new Set(workers.map(w => w.votingStation).filter(Boolean)).size}</p>
+            <p className="text-3xl font-bold">{new Set(filteredWorkers.map(w => w.votingStation).filter(Boolean)).size}</p>
+          </div>
+        </div>
+
+        {/* Gráfico por Municipio */}
+        <div className="bg-white rounded-xl p-6 shadow-sm">
+          <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2">
+            <BarChart3 size={20} /> Inscritos por Municipio
+          </h3>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={workersByMunicipality} layout="vertical">
+                <XAxis type="number" hide />
+                <YAxis dataKey="name" type="category" width={120} tick={{fontSize: 11}} />
+                <Tooltip />
+                <Bar dataKey="count" fill="#2563EB" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Filtro por Municipio */}
+        <div className="bg-white rounded-xl p-6 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <div className="flex items-center gap-2 text-gray-700">
+              <Filter size={20} />
+              <span className="font-medium">Filtrar por Municipio:</span>
+            </div>
+            <select 
+              value={selectedMunicipality} 
+              onChange={(e) => setSelectedMunicipality(e.target.value)}
+              className="flex-1 px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none bg-white"
+            >
+              {municipalities.map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+            {selectedMunicipality !== 'Todos' && (
+              <button 
+                onClick={() => setSelectedMunicipality('Todos')}
+                className="px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-lg flex items-center gap-2"
+              >
+                <RefreshCw size={18} /> Limpiar
+              </button>
+            )}
           </div>
         </div>
 
@@ -206,6 +305,7 @@ const Dashboard = () => {
           <Plus size={20} /> Crear Evento
         </button>
 
+        {/* Lista eventos */}
         <div className="space-y-4">
           <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2"><Activity size={20} /> Eventos Activos</h2>
           {events.map(event => (
@@ -229,7 +329,7 @@ const Dashboard = () => {
                   </div>
                 )}
                 <button onClick={() => navigate(`/stats/${event.id}`)} className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
-                  <BarChart3 size={16} /> Ver Estadísticas y Datos
+                  <BarChart3 size={16} /> Ver Estadísticas
                 </button>
               </div>
             </div>
@@ -242,10 +342,13 @@ const Dashboard = () => {
           )}
         </div>
 
+        {/* Electoreros - TABLA FILTRADA */}
         <div className="pt-6 border-t border-gray-200">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2"><Users size={20} /> Base de Datos Electoreros</h2>
-            <button onClick={() => exportToExcel(workers, "Electoreros_Completo")} className="text-green-600 text-sm flex items-center gap-1 hover:underline">
+            <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
+              <Users size={20} /> {selectedMunicipality === 'Todos' ? 'Base de Datos Electoreros' : `Electoreros - ${selectedMunicipality}`}
+            </h2>
+            <button onClick={exportFilteredExcel} className="text-green-600 text-sm flex items-center gap-1 hover:underline">
               <Download size={16} /> Descargar Excel
             </button>
           </div>
@@ -266,7 +369,7 @@ const Dashboard = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {workers.slice(0, 10).map(w => (
+                {filteredWorkers.slice(0, 20).map(w => (
                   <tr key={w.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-800">{w.name}</td>
                     <td className="px-4 py-3 text-gray-600">{w.idNumber}</td>
@@ -276,14 +379,14 @@ const Dashboard = () => {
                     <td className="px-4 py-3 text-gray-600">{w.votingStation || '-'}</td>
                   </tr>
                 ))}
-                {workers.length === 0 && (
-                  <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-400">Sin registros</td></tr>
+                {filteredWorkers.length === 0 && (
+                  <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-400">Sin registros {selectedMunicipality !== 'Todos' ? `en ${selectedMunicipality}` : ''}</td></tr>
                 )}
               </tbody>
             </table>
-            {workers.length > 10 && (
+            {filteredWorkers.length > 20 && (
               <div className="p-3 text-center text-xs text-gray-400 border-t bg-gray-50">
-                Mostrando 10 de {workers.length} registros. Descarga Excel para ver todos.
+                Mostrando 20 de {filteredWorkers.length} registros. Descarga Excel para ver todos.
               </div>
             )}
           </div>
@@ -334,7 +437,7 @@ const Dashboard = () => {
 };
 
 // ============================================
-// FORMULARIO PÚBLICO (SIN FOTOS - FUNCIONAL)
+// FORMULARIO PÚBLICO
 // ============================================
 
 const PublicForm = ({ type }) => {
@@ -374,7 +477,6 @@ const PublicForm = ({ type }) => {
     setError('');
 
     try {
-      // Verificar duplicado
       const isDuplicate = await checkDuplicate(formData.idNumber);
       if (isDuplicate) {
         setError('Esta cédula ya está registrada. No se permiten duplicados.');
@@ -382,7 +484,6 @@ const PublicForm = ({ type }) => {
         return;
       }
 
-      // Guardar datos (SIN FOTO - mucho más rápido y seguro)
       await addDoc(collection(db, type === 'event' ? 'event_attendees' : 'electoral_workers'), {
         name: formData.name,
         idNumber: formData.idNumber,
@@ -479,18 +580,12 @@ const EventStats = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetch = async () => {
-      try {
-        const q = query(collection(db, "event_attendees"), where("eventId", "==", id));
-        const snapshot = await getDocs(q);
-        setData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      } catch (err) {
-        console.error("Error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetch();
+    const q = query(collection(db, "event_attendees"), where("eventId", "==", id));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLoading(false);
+    });
+    return () => unsubscribe();
   }, [id]);
 
   if (loading) return <Loading />;
