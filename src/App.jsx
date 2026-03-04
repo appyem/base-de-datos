@@ -1,4 +1,4 @@
-// ARCHIVO: src/App.jsx (CORREGIDO - Mayúsculas + Storage Fix)
+// ARCHIVO: src/App.jsx (CORREGIDO - 27 Municipios de Caldas)
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, useParams, useNavigate } from 'react-router-dom';
 import { db, storage } from './firebase';
@@ -267,7 +267,7 @@ const Dashboard = () => {
               <thead className="bg-gray-50 text-gray-500">
                 <tr>
                   <th className="px-4 py-3">Nombre</th>
-                  <th className="px-4 py-3">Sector</th>
+                  <th className="px-4 py-3">Municipio</th>
                   <th className="px-4 py-3">Cédula</th>
                 </tr>
               </thead>
@@ -332,7 +332,7 @@ const Dashboard = () => {
 };
 
 // ============================================
-// PÁGINA: FORMULARIO PÚBLICO (CORREGIDO)
+// PÁGINA: FORMULARIO PÚBLICO
 // ============================================
 
 const PublicForm = ({ type }) => {
@@ -342,7 +342,35 @@ const PublicForm = ({ type }) => {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
 
-  const sectors = ["Zona Rural", "Filadelfia", "Samaria", "San Luis", "Morritos", "La Paila", "El Pintado", "El Verso", "La Soledad"];
+  // 27 MUNICIPIOS DE CALDAS
+  const municipalities = [
+    "Aguadas",
+    "Anserma",
+    "Aranzazu",
+    "Belalcázar",
+    "Chinchiná",
+    "Filadelfia",
+    "La Dorada",
+    "La Merced",
+    "Manizales (Capital)",
+    "Manzanares",
+    "Marmato",
+    "Marquetalia",
+    "Marulanda",
+    "Neira",
+    "Pácora",
+    "Palestina",
+    "Pensilvania",
+    "Riosucio",
+    "Risaralda",
+    "Salamina",
+    "Samaná",
+    "San José",
+    "Supía",
+    "Victoria",
+    "Villamaría",
+    "Viterbo"
+  ];
 
   const requiresPhoto = type === 'worker';
 
@@ -364,7 +392,6 @@ const PublicForm = ({ type }) => {
     setError('');
 
     try {
-      // Verificar duplicados
       const isDuplicate = await checkDuplicate(formData.idNumber);
       if (isDuplicate) {
         setError('Esta cédula ya está registrada. No se permiten duplicados.');
@@ -374,7 +401,6 @@ const PublicForm = ({ type }) => {
 
       let photoURL = null;
       
-      // Solo subir foto si es electorero y hay foto seleccionada
       if (requiresPhoto && formData.photo) {
         try {
           const storageRef = ref(storage, `ids/${type}_${Date.now()}_${formData.idNumber}`);
@@ -382,7 +408,6 @@ const PublicForm = ({ type }) => {
           photoURL = await getDownloadURL(snapshot.ref);
         } catch (storageError) {
           console.error("Error subiendo foto:", storageError);
-          // Si falla la foto, continuar sin ella para eventos
           if (requiresPhoto) {
             setError('Error subiendo la foto. Verifica las reglas de Firebase Storage.');
             setLoading(false);
@@ -391,7 +416,6 @@ const PublicForm = ({ type }) => {
         }
       }
 
-      // Guardar en Firestore
       await addDoc(collection(db, type === 'event' ? 'event_attendees' : 'electoral_workers'), {
         name: formData.name,
         idNumber: formData.idNumber,
@@ -411,7 +435,6 @@ const PublicForm = ({ type }) => {
     }
   };
 
-  // Función para convertir a mayúsculas
   const handleNameChange = (e) => {
     const value = e.target.value.toUpperCase();
     setFormData({...formData, name: value});
@@ -454,10 +477,10 @@ const PublicForm = ({ type }) => {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Sector / Zona</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Municipio</label>
             <select required className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none bg-white" value={formData.sector} onChange={e => setFormData({...formData, sector: e.target.value})}>
-              <option value="">Seleccione...</option>
-              {sectors.map(s => <option key={s} value={s}>{s}</option>)}
+              <option value="">Seleccione Municipio...</option>
+              {municipalities.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
 
@@ -530,12 +553,12 @@ const EventStats = () => {
             <p className="text-4xl font-bold text-blue-600">{data.length}</p>
           </div>
           <div className="bg-white rounded-xl p-6 text-center shadow-sm">
-            <p className="text-gray-500 text-sm">Sectores</p>
+            <p className="text-gray-500 text-sm">Municipios</p>
             <p className="text-4xl font-bold text-green-600">{chartData.length}</p>
           </div>
         </div>
         <div className="bg-white rounded-xl p-6 shadow-sm">
-          <h3 className="font-bold text-gray-700 mb-4">Por Sector</h3>
+          <h3 className="font-bold text-gray-700 mb-4">Por Municipio</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -562,7 +585,7 @@ const EventStats = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead className="bg-gray-100 text-gray-600">
-                <tr><th className="p-3">Nombre</th><th className="p-3">Cédula</th><th className="p-3">Celular</th><th className="p-3">Sector</th></tr>
+                <tr><th className="p-3">Nombre</th><th className="p-3">Cédula</th><th className="p-3">Celular</th><th className="p-3">Municipio</th></tr>
               </thead>
               <tbody className="divide-y">
                 {data.map(p => (
@@ -603,4 +626,3 @@ function App() {
 }
 
 export default App;
-
