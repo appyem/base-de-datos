@@ -1,8 +1,8 @@
-// ARCHIVO: src/App.jsx (CON FILTROS + TIEMPO REAL)
+// ARCHIVO: src/App.jsx (CORREGIDO - Importación completa)
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, useParams, useNavigate } from 'react-router-dom';
 import { db } from './firebase';
-import { collection, addDoc, onSnapshot, query, where, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, where, orderBy, deleteDoc, doc, getDocs } from 'firebase/firestore';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from 'recharts';
 import { 
   Users, Calendar, Download, Plus, Activity, FileSpreadsheet, 
@@ -114,7 +114,7 @@ const LinkCopier = ({ url, label }) => {
 };
 
 // ============================================
-// DASHBOARD (CON TIEMPO REAL + FILTROS)
+// DASHBOARD (TIEMPO REAL + FILTROS)
 // ============================================
 
 const Dashboard = () => {
@@ -141,7 +141,6 @@ const Dashboard = () => {
 
   // TIEMPO REAL CON onSnapshot
   useEffect(() => {
-    // Escuchar eventos en tiempo real
     const eventsQuery = query(collection(db, "events"), orderBy("createdAt", "desc"));
     const unsubscribeEvents = onSnapshot(eventsQuery, (snapshot) => {
       const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -149,7 +148,6 @@ const Dashboard = () => {
       setLastUpdate(new Date());
     });
 
-    // Escuchar electoreros en tiempo real
     const workersQuery = query(collection(db, "electoral_workers"));
     const unsubscribeWorkers = onSnapshot(workersQuery, (snapshot) => {
       const workersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -159,19 +157,16 @@ const Dashboard = () => {
 
     setLoading(false);
 
-    // Limpiar suscripciones al desmontar
     return () => {
       unsubscribeEvents();
       unsubscribeWorkers();
     };
   }, []);
 
-  // Filtrar por municipio
   const filteredWorkers = selectedMunicipality === 'Todos' 
     ? workers 
     : workers.filter(w => w.sector === selectedMunicipality);
 
-  // Agrupar por municipio para estadísticas
   const workersByMunicipality = municipalities.filter(m => m !== 'Todos').map(municipality => ({
     name: municipality,
     count: workers.filter(w => w.sector === municipality).length
@@ -226,7 +221,6 @@ const Dashboard = () => {
       <Header title="Bases De Datos Dashboard" />
       <div className="max-w-6xl mx-auto p-4 space-y-6">
         
-        {/* Indicador de tiempo real */}
         <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg p-3">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
@@ -237,7 +231,6 @@ const Dashboard = () => {
           </span>
         </div>
 
-        {/* Tarjetas resumen */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-blue-600 text-white rounded-xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-2"><Calendar size={20} /><span className="text-sm">Eventos</span></div>
@@ -257,7 +250,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Gráfico por Municipio */}
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2">
             <BarChart3 size={20} /> Inscritos por Municipio
@@ -274,7 +266,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Filtro por Municipio */}
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <div className="flex flex-col md:flex-row md:items-center gap-4">
             <div className="flex items-center gap-2 text-gray-700">
@@ -305,7 +296,6 @@ const Dashboard = () => {
           <Plus size={20} /> Crear Evento
         </button>
 
-        {/* Lista eventos */}
         <div className="space-y-4">
           <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2"><Activity size={20} /> Eventos Activos</h2>
           {events.map(event => (
@@ -342,7 +332,6 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* Electoreros - TABLA FILTRADA */}
         <div className="pt-6 border-t border-gray-200">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
