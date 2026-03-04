@@ -1,14 +1,13 @@
-// ARCHIVO: src/App.jsx (ACTUALIZADO - Dashboard con Nuevos Campos)
+// ARCHIVO: src/App.jsx (SIN STORAGE - IMÁGENES EN BASE64)
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, useParams, useNavigate } from 'react-router-dom';
-import { db, storage } from './firebase';
+import { db } from './firebase';
 import { collection, addDoc, getDocs, query, where, orderBy, deleteDoc, doc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { 
   Users, Calendar, Download, Plus, Activity, FileSpreadsheet, 
   ArrowLeft, Trash2, Link as LinkIcon, AlertCircle,
-  BarChart3, Copy, Share2, ExternalLink, CheckCircle, Camera, MapPin, BadgeCheck, UserCheck, Building2
+  BarChart3, Copy, Share2, ExternalLink, CheckCircle, Camera, MapPin, BadgeCheck, UserCheck, Building2, X, Image
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -18,7 +17,7 @@ import * as XLSX from 'xlsx';
 
 const Header = ({ title, onBack }) => (
   <div className="bg-white shadow-sm sticky top-0 z-50">
-    <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-4">
+    <div className="max-w-6xl mx-auto px-4 py-4 flex items-center gap-4">
       {onBack && (
         <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full">
           <ArrowLeft size={24} className="text-gray-600" />
@@ -62,6 +61,18 @@ const ErrorMessage = ({ message, onClose }) => (
       <button onClick={onClose} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg">
         Entendido
       </button>
+    </div>
+  </div>
+);
+
+// Componente para ver imagen ampliada
+const ImageViewer = ({ imageBase64, onClose }) => (
+  <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="relative max-w-4xl max-h-screen">
+      <button onClick={onClose} className="absolute -top-10 right-0 text-white hover:text-gray-300">
+        <X size={32} />
+      </button>
+      <img src={imageBase64} alt="Cédula" className="max-w-full max-h-[80vh] object-contain rounded-lg" />
     </div>
   </div>
 );
@@ -115,7 +126,7 @@ const LinkCopier = ({ url, label }) => {
 };
 
 // ============================================
-// PÁGINA: DASHBOARD (ACTUALIZADO)
+// PÁGINA: DASHBOARD
 // ============================================
 
 const Dashboard = () => {
@@ -125,6 +136,7 @@ const Dashboard = () => {
   const [showModal, setShowModal] = useState(false);
   const [eventToDelete, setEventToDelete] = useState(null);
   const [showLinks, setShowLinks] = useState(null);
+  const [viewImage, setViewImage] = useState(null);
   const [newEvent, setNewEvent] = useState({ title: '', date: '', time: '', location: '', leader: '', type: 'Reunión' });
   const navigate = useNavigate();
 
@@ -260,7 +272,7 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* Electoreros - TABLA COMPLETA CON NUEVOS CAMPOS */}
+        {/* Electoreros - TABLA CON IMÁGENES */}
         <div className="pt-6 border-t border-gray-200">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
@@ -282,8 +294,9 @@ const Dashboard = () => {
                   <th className="px-4 py-3 text-left">Cédula</th>
                   <th className="px-4 py-3 text-left">Celular</th>
                   <th className="px-4 py-3 text-left">Municipio</th>
-                  <th className="px-4 py-3 text-left">Líder que lo Remite</th>
-                  <th className="px-4 py-3 text-left">Puesto de Votación</th>
+                  <th className="px-4 py-3 text-left">Líder</th>
+                  <th className="px-4 py-3 text-left">Puesto</th>
+                  <th className="px-4 py-3 text-center">Foto Cédula</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -295,10 +308,22 @@ const Dashboard = () => {
                     <td className="px-4 py-3"><span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">{w.sector}</span></td>
                     <td className="px-4 py-3 text-gray-600">{w.leaderRef || '-'}</td>
                     <td className="px-4 py-3 text-gray-600">{w.votingStation || '-'}</td>
+                    <td className="px-4 py-3 text-center">
+                      {w.photoBase64 ? (
+                        <button 
+                          onClick={() => setViewImage(w.photoBase64)}
+                          className="text-blue-600 hover:text-blue-800 flex items-center justify-center gap-1 mx-auto"
+                        >
+                          <Image size={16} /> Ver
+                        </button>
+                      ) : (
+                        <span className="text-gray-400">Sin foto</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {workers.length === 0 && (
-                  <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-400">Sin registros</td></tr>
+                  <tr><td colSpan="7" className="px-4 py-8 text-center text-gray-400">Sin registros</td></tr>
                 )}
               </tbody>
             </table>
@@ -310,6 +335,9 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Visor de imágenes */}
+      {viewImage && <ImageViewer imageBase64={viewImage} onClose={() => setViewImage(null)} />}
 
       {/* Modal crear evento */}
       {showModal && (
@@ -357,7 +385,7 @@ const Dashboard = () => {
 };
 
 // ============================================
-// PÁGINA: FORMULARIO PÚBLICO
+// PÁGINA: FORMULARIO PÚBLICO (BASE64)
 // ============================================
 
 const PublicForm = ({ type }) => {
@@ -369,7 +397,7 @@ const PublicForm = ({ type }) => {
     sector: '', 
     leaderRef: '',
     votingStation: '',
-    photo: null 
+    photoBase64: null 
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -383,8 +411,17 @@ const PublicForm = ({ type }) => {
     "Supía", "Victoria", "Villamaría", "Viterbo"
   ];
 
-  const requiresPhoto = type === 'worker';
   const requiresExtraFields = type === 'worker';
+
+  // Convertir imagen a Base64
+  const convertToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = error => reject(error);
+    });
+  };
 
   const checkDuplicate = async (cedula) => {
     const collectionName = type === 'event' ? 'event_attendees' : 'electoral_workers';
@@ -411,23 +448,6 @@ const PublicForm = ({ type }) => {
         return;
       }
 
-      let photoURL = null;
-      
-      if (requiresPhoto && formData.photo) {
-        try {
-          const storageRef = ref(storage, `ids/${type}_${Date.now()}_${formData.idNumber}`);
-          const snapshot = await uploadBytes(storageRef, formData.photo);
-          photoURL = await getDownloadURL(snapshot.ref);
-        } catch (storageError) {
-          console.error("Error subiendo foto:", storageError);
-          if (requiresPhoto) {
-            setError('Error subiendo la foto. Verifica las reglas de Firebase Storage.');
-            setLoading(false);
-            return;
-          }
-        }
-      }
-
       await addDoc(collection(db, type === 'event' ? 'event_attendees' : 'electoral_workers'), {
         name: formData.name,
         idNumber: formData.idNumber,
@@ -435,7 +455,7 @@ const PublicForm = ({ type }) => {
         sector: formData.sector,
         leaderRef: requiresExtraFields ? formData.leaderRef : null,
         votingStation: requiresExtraFields ? formData.votingStation : null,
-        photoURL: photoURL,
+        photoBase64: formData.photoBase64 || null,
         registeredAt: new Date().toISOString(),
         eventId: type === 'event' ? id : null
       });
@@ -452,6 +472,18 @@ const PublicForm = ({ type }) => {
   const handleNameChange = (e) => {
     const value = e.target.value.toUpperCase();
     setFormData({...formData, name: value});
+  };
+
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      try {
+        const base64 = await convertToBase64(file);
+        setFormData({...formData, photoBase64: base64});
+      } catch (err) {
+        setError('Error procesando la imagen');
+      }
+    }
   };
 
   if (success) return <SuccessMessage message={type === 'event' ? "Asistencia registrada" : "Registro completado"} />;
@@ -504,16 +536,17 @@ const PublicForm = ({ type }) => {
             </>
           )}
 
-          {requiresPhoto && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Foto de Cédula</label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition-colors">
-                <input type="file" accept="image/*" capture="environment" className="w-full" onChange={e => setFormData({...formData, photo: e.target.files[0]})} />
-                <Camera className="mx-auto text-gray-400 mb-2" size={24} />
-                <p className="text-sm text-gray-500">{formData.photo ? formData.photo.name : "Toca para subir foto"}</p>
-              </div>
+          {/* FOTO OPCIONAL - BASE64 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Foto de Cédula <span className="text-gray-400">(Opcional)</span>
+            </label>
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition-colors">
+              <input type="file" accept="image/*" capture="environment" className="w-full" onChange={handlePhotoChange} />
+              <Camera className="mx-auto text-gray-400 mb-2" size={24} />
+              <p className="text-sm text-gray-500">{formData.photoBase64 ? "✅ Imagen lista" : "Toca para subir foto"}</p>
             </div>
-          )}
+          </div>
 
           <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors disabled:bg-gray-400">
             {loading ? 'Guardando...' : 'Enviar Registro'}
@@ -527,7 +560,7 @@ const PublicForm = ({ type }) => {
 };
 
 // ============================================
-// PÁGINA: ESTADÍSTICAS (ACTUALIZADA)
+// PÁGINA: ESTADÍSTICAS
 // ============================================
 
 const EventStats = () => {
@@ -603,12 +636,7 @@ const EventStats = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-100 text-gray-600">
-                <tr>
-                  <th className="p-3 text-left">Nombre</th>
-                  <th className="p-3 text-left">Cédula</th>
-                  <th className="p-3 text-left">Celular</th>
-                  <th className="p-3 text-left">Municipio</th>
-                </tr>
+                <tr><th className="p-3 text-left">Nombre</th><th className="p-3 text-left">Cédula</th><th className="p-3 text-left">Celular</th><th className="p-3 text-left">Municipio</th></tr>
               </thead>
               <tbody className="divide-y">
                 {data.map(p => (

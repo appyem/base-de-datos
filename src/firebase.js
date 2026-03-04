@@ -1,6 +1,6 @@
+// ARCHIVO: src/firebase.js (SIN STORAGE)
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBEughbyZJU2RW3fhaMwfzr-GUHOATZw5k",
@@ -13,4 +13,4 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
-export const storage = getStorage(app);
+// NO exportamos storage ya no lo usamos
