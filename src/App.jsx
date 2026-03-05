@@ -1,13 +1,13 @@
-// ARCHIVO: src/App.jsx (CON LÍMITE DE 1000 ELECTOREROS)
+// ARCHIVO: src/App.jsx (CON FILTROS AVANZADOS + ELIMINAR ELECTOREROS)
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, useParams, useNavigate } from 'react-router-dom';
 import { db } from './firebase';
-import { collection, addDoc, onSnapshot, query, where, orderBy, deleteDoc, doc, getDocs, count } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, where, orderBy, deleteDoc, doc, getDocs } from 'firebase/firestore';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from 'recharts';
 import { 
   Users, Calendar, Download, Plus, Activity, FileSpreadsheet, 
   ArrowLeft, Trash2, Link as LinkIcon, AlertCircle,
-  BarChart3, Copy, Share2, ExternalLink, CheckCircle, MapPin, BadgeCheck, UserCheck, Building2, RefreshCw, Filter
+  BarChart3, Copy, Share2, ExternalLink, CheckCircle, MapPin, BadgeCheck, UserCheck, Building2, RefreshCw, Filter, Search, X
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -47,7 +47,7 @@ const SuccessMessage = ({ message }) => (
       <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
         <CheckCircle size={32} className="text-green-600" />
       </div>
-      <h3 className="text-xl font-bold text-gray-800 mb-2">¡Registrado!</h3>
+      <h3 className="text-xl font-bold text-gray-800 mb-2">¡Éxito!</h3>
       <p className="text-gray-600 mb-6">{message}</p>
       <button onClick={() => window.location.reload()} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg">
         Continuar
@@ -120,7 +120,7 @@ const LinkCopier = ({ url, label }) => {
 };
 
 // ============================================
-// DASHBOARD (TIEMPO REAL + FILTROS + CONTADOR)
+// DASHBOARD (CON FILTROS AVANZADOS + ELIMINAR)
 // ============================================
 
 const Dashboard = () => {
@@ -132,7 +132,11 @@ const Dashboard = () => {
   const [showLinks, setShowLinks] = useState(null);
   const [newEvent, setNewEvent] = useState({ title: '', date: '', time: '', location: '', leader: '', type: 'Reunión' });
   const [selectedMunicipality, setSelectedMunicipality] = useState('Todos');
+  const [selectedLeader, setSelectedLeader] = useState('Todos');
+  const [searchCedula, setSearchCedula] = useState('');
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [workerToDelete, setWorkerToDelete] = useState(null);
+  const [showSuccess, setShowSuccess] = useState('');
   const navigate = useNavigate();
 
   const municipalities = [
@@ -144,6 +148,9 @@ const Dashboard = () => {
   ];
 
   const getBaseUrl = () => window.location.origin + window.location.pathname;
+
+  // Obtener líderes únicos para el filtro
+  const uniqueLeaders = ['Todos', ...new Set(workers.map(w => w.leaderRef).filter(Boolean))].sort();
 
   // TIEMPO REAL CON onSnapshot
   useEffect(() => {
@@ -169,9 +176,13 @@ const Dashboard = () => {
     };
   }, []);
 
-  const filteredWorkers = selectedMunicipality === 'Todos' 
-    ? workers 
-    : workers.filter(w => w.sector === selectedMunicipality);
+  // FILTROS COMBINADOS (Municipio + Líder + Cédula)
+  const filteredWorkers = workers.filter(w => {
+    const matchMunicipality = selectedMunicipality === 'Todos' || w.sector === selectedMunicipality;
+    const matchLeader = selectedLeader === 'Todos' || w.leaderRef === selectedLeader;
+    const matchCedula = searchCedula === '' || w.idNumber.includes(searchCedula);
+    return matchMunicipality && matchLeader && matchCedula;
+  });
 
   const workersByMunicipality = municipalities.filter(m => m !== 'Todos').map(municipality => ({
     name: municipality,
@@ -181,7 +192,7 @@ const Dashboard = () => {
   // Calcular progreso del límite
   const progressPercentage = (workers.length / MAX_ELECTOREROS) * 100;
   const remainingSpots = MAX_ELECTOREROS - workers.length;
-  const isNearLimit = workers.length >= MAX_ELECTOREROS * 0.9; // 90% del límite
+  const isNearLimit = workers.length >= MAX_ELECTOREROS * 0.9;
   const isAtLimit = workers.length >= MAX_ELECTOREROS;
 
   const handleCreateEvent = async (e) => {
@@ -207,6 +218,21 @@ const Dashboard = () => {
     }
   };
 
+  // ELIMINAR ELECTORER
+  const handleDeleteWorker = async (workerId, workerName) => {
+    if (confirm(`¿Estás seguro de eliminar a ${workerName}? Esta acción no se puede deshacer.`)) {
+      try {
+        await deleteDoc(doc(db, "electoral_workers", workerId));
+        setWorkerToDelete(null);
+        setShowSuccess('Electorero eliminado correctamente');
+        setTimeout(() => setShowSuccess(''), 3000);
+      } catch (error) {
+        console.error("Error deleting worker:", error);
+        alert("Error eliminando electorero");
+      }
+    }
+  };
+
   const exportToExcel = (data, fileName) => {
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -223,8 +249,16 @@ const Dashboard = () => {
       Líder: w.leaderRef || '',
       Puesto: w.votingStation || ''
     }));
-    exportToExcel(dataToExport, `Electoreros_${selectedMunicipality}`);
+    exportToExcel(dataToExport, `Electoreros_Filtrado_${selectedMunicipality}`);
   };
+
+  const clearAllFilters = () => {
+    setSelectedMunicipality('Todos');
+    setSelectedLeader('Todos');
+    setSearchCedula('');
+  };
+
+  const hasActiveFilters = selectedMunicipality !== 'Todos' || selectedLeader !== 'Todos' || searchCedula !== '';
 
   if (loading) return <Loading />;
 
@@ -233,6 +267,14 @@ const Dashboard = () => {
       <Header title="Bases De Datos Dashboard" />
       <div className="max-w-6xl mx-auto p-4 space-y-6">
         
+        {/* Notificación de éxito */}
+        {showSuccess && (
+          <div className="fixed top-20 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+            <CheckCircle size={20} />
+            {showSuccess}
+          </div>
+        )}
+
         {/* Indicador de tiempo real */}
         <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg p-3">
           <div className="flex items-center gap-2">
@@ -261,15 +303,12 @@ const Dashboard = () => {
               <p className="text-sm text-gray-600">de {MAX_ELECTOREROS}</p>
             </div>
           </div>
-          
-          {/* Barra de progreso */}
           <div className="w-full bg-gray-200 rounded-full h-4 mb-3">
             <div 
               className={`h-4 rounded-full transition-all duration-500 ${isAtLimit ? 'bg-red-600' : isNearLimit ? 'bg-orange-500' : 'bg-blue-600'}`}
               style={{ width: `${Math.min(progressPercentage, 100)}%` }}
             ></div>
           </div>
-          
           <div className="flex justify-between text-sm">
             <span className={isAtLimit ? 'text-red-600 font-bold' : isNearLimit ? 'text-orange-600 font-bold' : 'text-gray-600'}>
               {remainingSpots} cupos {isAtLimit ? 'DISPONIBLES' : 'restantes'}
@@ -315,31 +354,71 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Filtro por Municipio */}
+        {/* FILTROS AVANZADOS */}
         <div className="bg-white rounded-xl p-6 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-center gap-4">
-            <div className="flex items-center gap-2 text-gray-700">
-              <Filter size={20} />
-              <span className="font-medium">Filtrar por Municipio:</span>
-            </div>
-            <select 
-              value={selectedMunicipality} 
-              onChange={(e) => setSelectedMunicipality(e.target.value)}
-              className="flex-1 px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none bg-white"
-            >
-              {municipalities.map(m => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-            {selectedMunicipality !== 'Todos' && (
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-gray-700 flex items-center gap-2">
+              <Filter size={20} /> Filtros de Búsqueda
+            </h3>
+            {hasActiveFilters && (
               <button 
-                onClick={() => setSelectedMunicipality('Todos')}
-                className="px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-lg flex items-center gap-2"
+                onClick={clearAllFilters}
+                className="text-sm text-red-600 hover:text-red-800 flex items-center gap-1"
               >
-                <RefreshCw size={18} /> Limpiar
+                <X size={16} /> Limpiar todos
               </button>
             )}
           </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Filtro por Municipio */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Municipio</label>
+              <select 
+                value={selectedMunicipality} 
+                onChange={(e) => setSelectedMunicipality(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none bg-white"
+              >
+                {municipalities.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filtro por Líder */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Líder que lo Remite</label>
+              <select 
+                value={selectedLeader} 
+                onChange={(e) => setSelectedLeader(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none bg-white"
+              >
+                {uniqueLeaders.map(leader => (
+                  <option key={leader} value={leader}>{leader}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Búsqueda por Cédula */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Buscar por Cédula</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <input 
+                  type="text" 
+                  placeholder="Ej: 123456789"
+                  value={searchCedula}
+                  onChange={(e) => setSearchCedula(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none"
+                />
+              </div>
+            </div>
+          </div>
+          {hasActiveFilters && (
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg flex items-center gap-2 text-sm text-blue-700">
+              <CheckCircle size={16} />
+              Mostrando {filteredWorkers.length} de {workers.length} registros filtrados
+            </div>
+          )}
         </div>
 
         <button onClick={() => setShowModal(true)} className="w-full py-4 bg-white border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-semibold hover:border-blue-600 hover:text-blue-600 flex items-center justify-center gap-2">
@@ -383,11 +462,11 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* Electoreros - TABLA FILTRADA */}
+        {/* Electoreros - TABLA CON ELIMINAR */}
         <div className="pt-6 border-t border-gray-200">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
-              <Users size={20} /> {selectedMunicipality === 'Todos' ? 'Base de Datos Electoreros' : `Electoreros - ${selectedMunicipality}`}
+              <Users size={20} /> {selectedMunicipality === 'Todos' && selectedLeader === 'Todos' && searchCedula === '' ? 'Base de Datos Electoreros' : 'Resultados Filtrados'}
             </h2>
             <button onClick={exportFilteredExcel} className="text-green-600 text-sm flex items-center gap-1 hover:underline">
               <Download size={16} /> Descargar Excel
@@ -407,10 +486,11 @@ const Dashboard = () => {
                   <th className="px-4 py-3 text-left">Municipio</th>
                   <th className="px-4 py-3 text-left">Líder</th>
                   <th className="px-4 py-3 text-left">Puesto</th>
+                  <th className="px-4 py-3 text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredWorkers.slice(0, 20).map(w => (
+                {filteredWorkers.slice(0, 50).map(w => (
                   <tr key={w.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-800">{w.name}</td>
                     <td className="px-4 py-3 text-gray-600">{w.idNumber}</td>
@@ -418,22 +498,52 @@ const Dashboard = () => {
                     <td className="px-4 py-3"><span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">{w.sector}</span></td>
                     <td className="px-4 py-3 text-gray-600">{w.leaderRef || '-'}</td>
                     <td className="px-4 py-3 text-gray-600">{w.votingStation || '-'}</td>
+                    <td className="px-4 py-3 text-center">
+                      <button 
+                        onClick={() => setWorkerToDelete(w)}
+                        className="text-red-600 hover:text-red-800 hover:bg-red-50 px-3 py-1 rounded transition-colors flex items-center gap-1 mx-auto"
+                        title="Eliminar electorero"
+                      >
+                        <Trash2 size={16} /> Eliminar
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {filteredWorkers.length === 0 && (
-                  <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-400">Sin registros {selectedMunicipality !== 'Todos' ? `en ${selectedMunicipality}` : ''}</td></tr>
+                  <tr><td colSpan="7" className="px-4 py-8 text-center text-gray-400">No se encontraron registros con los filtros actuales</td></tr>
                 )}
               </tbody>
             </table>
-            {filteredWorkers.length > 20 && (
+            {filteredWorkers.length > 50 && (
               <div className="p-3 text-center text-xs text-gray-400 border-t bg-gray-50">
-                Mostrando 20 de {filteredWorkers.length} registros. Descarga Excel para ver todos.
+                Mostrando 50 de {filteredWorkers.length} registros. Descarga Excel para ver todos.
               </div>
             )}
           </div>
         </div>
       </div>
 
+      {/* Modal eliminar electorero */}
+      {workerToDelete && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 size={32} className="text-red-600" />
+            </div>
+            <h2 className="text-xl font-bold mb-2 text-center">Eliminar Electorero</h2>
+            <p className="text-gray-600 mb-6 text-center">
+              ¿Estás seguro de eliminar a <strong>{workerToDelete.name}</strong> con cédula <strong>{workerToDelete.idNumber}</strong>?<br/><br/>
+              Esta acción no se puede deshacer.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setWorkerToDelete(null)} className="flex-1 py-3 text-gray-600 font-medium border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
+              <button onClick={() => handleDeleteWorker(workerToDelete.id, workerToDelete.name)} className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg">Eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal crear evento */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6">
@@ -478,7 +588,7 @@ const Dashboard = () => {
 };
 
 // ============================================
-// FORMULARIO PÚBLICO (CON VALIDACIÓN DE LÍMITE)
+// FORMULARIO PÚBLICO
 // ============================================
 
 const PublicForm = ({ type }) => {
@@ -501,7 +611,6 @@ const PublicForm = ({ type }) => {
 
   const requiresExtraFields = type === 'worker';
 
-  // Obtener total de electoreros en tiempo real
   useEffect(() => {
     if (type === 'worker') {
       const workersQuery = query(collection(db, "electoral_workers"));
@@ -530,14 +639,12 @@ const PublicForm = ({ type }) => {
     setError('');
 
     try {
-      // VALIDAR LÍMITE DE ELECTOREROS
       if (type === 'worker' && totalWorkers >= MAX_ELECTOREROS) {
-        setError(`Lo sentimos, se ha alcanzado el límite máximo de ${MAX_ELECTOREROS} electoreros. Ya no se aceptan más registros.`);
+        setError(`Lo sentimos, se ha alcanzado el límite máximo de ${MAX_ELECTOREROS} electoreros.`);
         setLoading(false);
         return;
       }
 
-      // Verificar duplicado
       const isDuplicate = await checkDuplicate(formData.idNumber);
       if (isDuplicate) {
         setError('Esta cédula ya está registrada. No se permiten duplicados.');
@@ -569,7 +676,6 @@ const PublicForm = ({ type }) => {
     setFormData({...formData, name: e.target.value.toUpperCase()});
   };
 
-  // Calcular cupos restantes
   const remainingSpots = MAX_ELECTOREROS - totalWorkers;
   const isAtLimit = totalWorkers >= MAX_ELECTOREROS;
   const isNearLimit = totalWorkers >= MAX_ELECTOREROS * 0.9;
@@ -581,7 +687,6 @@ const PublicForm = ({ type }) => {
       <Header title={type === 'event' ? "Registro de Asistencia" : "Registro Electoreros"} />
       <div className="flex-1 max-w-md mx-auto w-full p-4 flex flex-col justify-center">
         
-        {/* Barra de progreso solo para electoreros */}
         {type === 'worker' && (
           <div className={`rounded-xl p-4 mb-6 shadow-sm ${isAtLimit ? 'bg-red-50 border-2 border-red-300' : isNearLimit ? 'bg-orange-50 border-2 border-orange-300' : 'bg-blue-50 border-2 border-blue-200'}`}>
             <div className="flex justify-between items-center mb-2">
@@ -597,7 +702,7 @@ const PublicForm = ({ type }) => {
               ></div>
             </div>
             {isNearLimit && !isAtLimit && (
-              <p className="text-xs text-orange-600 mt-2">⚠️ ¡Quedan pocos cupos! Regístrate ahora.</p>
+              <p className="text-xs text-orange-600 mt-2">⚠️ ¡Quedan pocos cupos!</p>
             )}
             {isAtLimit && (
               <p className="text-xs text-red-600 mt-2">❌ No hay cupos disponibles.</p>
